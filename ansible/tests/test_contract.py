@@ -98,6 +98,11 @@ class DeploymentContractTest(unittest.TestCase):
             self.assertIn(marker, tasks)
         self.assertNotIn("state: restarted", tasks)
         self.assertNotIn("docker compose down", tasks)
+        defaults = (ROOT / "roles/katavti/defaults/main.yml").read_text()
+        self.assertIn('katavti_staging_dir: "{{ katavti_base_dir }}/staging"', defaults)
+        main = (ROOT / "roles/katavti/tasks/main.yml").read_text()
+        self.assertIn('katavti_candidate_route: "{{ katavti_staging_dir }}', main)
+        self.assertIn('katavti_previous_route: "{{ katavti_staging_dir }}', main)
 
     def test_client_image_accepts_google_client_id_build_argument(self):
         dockerfile = (ROOT.parent / "client/Dockerfile").read_text()

@@ -5,6 +5,7 @@ katavti_system_gid: 991
 katavti_base_dir: /opt/katavti
 katavti_releases_dir: "{{ katavti_base_dir }}/releases"
 katavti_config_dir: "{{ katavti_base_dir }}/config"
+katavti_staging_dir: "{{ katavti_base_dir }}/staging"
 katavti_state_file: "{{ katavti_base_dir }}/active-slot"
 katavti_data_dir: /var/lib/katavti/notes
 katavti_container_data_dir: /data

@@ -36,8 +36,8 @@
     katavti_client_container_name: "katavti-{{ katavti_candidate_slot }}-client"
     katavti_server_container_name: "katavti-{{ katavti_candidate_slot }}-server"
     katavti_candidate_dir: "{{ katavti_releases_dir }}/{{ katavti_candidate_slot }}"
-    katavti_candidate_route: "{{ katavti_shared_caddy_routes_dir }}/.katavti.{{ katavti_candidate_slot }}.candidate"
-    katavti_previous_route: "{{ katavti_shared_caddy_routes_dir }}/.katavti.previous"
+    katavti_candidate_route: "{{ katavti_staging_dir }}/katavti.{{ katavti_candidate_slot }}.candidate"
+    katavti_previous_route: "{{ katavti_staging_dir }}/katavti.previous"
 
 - name: Ensure Katavti system group exists
   ansible.builtin.group:
@@ -66,6 +66,7 @@
     - {path: "{{ katavti_releases_dir }}", owner: root, group: root, mode: "0755"}
     - {path: "{{ katavti_candidate_dir }}", owner: root, group: root, mode: "0755"}
     - {path: "{{ katavti_config_dir }}", owner: root, group: root, mode: "0750"}
+    - {path: "{{ katavti_staging_dir }}", owner: root, group: root, mode: "0750"}
     - path: "{{ katavti_data_dir }}"
       owner: "{{ katavti_system_user }}"
       group: "{{ katavti_system_user }}"
