@@ -11,3 +11,6 @@ config/
 secrets/
 coverage/
 .DS_Store
+
+.venv-ansible/
+ansible/.test-output/

@@ -1,0 +1,9 @@
+---
+- name: Build and publish immutable Katavti release images
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: katavti_images
+      vars:
+        katavti_images_build_missing: true

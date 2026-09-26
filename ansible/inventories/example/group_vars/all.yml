@@ -1,0 +1,19 @@
+---
+# Copy this inventory outside the repository and replace every placeholder.
+katavti_existing_host: ""
+katavti_existing_user: azureuser
+katavti_ssh_port: 22
+katavti_domain_name: katavti.klino.me
+katavti_tls_email: admin@example.com
+katavti_images_registry_namespace: docker.io/lutraman
+katavti_images_platform: linux/amd64
+katavti_images_google_client_id: ""
+katavti_smtp_url: ""
+katavti_mail_from: Katavti <no-reply@katavti.klino.me>
+katavti_base_dir: /opt/katavti
+katavti_data_dir: /var/lib/katavti/notes
+katavti_shared_network_name: bifrost-stack_default
+katavti_shared_caddy_project_dir: /opt/bifrost-stack
+katavti_shared_caddy_routes_dir: /opt/bifrost-stack/caddy/caddy.d
+katavti_shared_caddy_service: caddy
+katavti_manage_docker: false

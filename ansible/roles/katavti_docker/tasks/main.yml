@@ -1,0 +1,6 @@
+---
+- name: Refuse implicit Docker changes on a shared host
+  ansible.builtin.fail:
+    msg: >-
+      Docker management is intentionally unsupported on the shared host;
+      provision it separately.

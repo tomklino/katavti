@@ -1,0 +1,62 @@
+---
+- name: Render and validate deployment artifacts without deployment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    katavti_domain_name: katavti.example.test
+    katavti_candidate_slot: blue
+    katavti_client_container_name: katavti-blue-client
+    katavti_server_container_name: katavti-blue-server
+    katavti_client_image: example/katavti-client:v0.2.0
+    katavti_server_image: example/katavti-server:v0.2.0
+    katavti_server_port: 3030
+    katavti_client_port: 8080
+    katavti_system_uid: 991
+    katavti_system_gid: 991
+    katavti_data_dir: /var/lib/katavti/notes
+    katavti_container_data_dir: /data
+    katavti_config_dir: /opt/katavti/config
+    katavti_shared_network_name: bifrost-stack_default
+    katavti_environment_type: prod
+    katavti_cors_origins: [https://katavti.example.test]
+    katavti_identity_header_name: x-user-id
+    katavti_api_base_path: /api/v1beta
+    katavti_magic_link_base_url: https://katavti.example.test
+    katavti_mail_from: Katavti <no-reply@example.test>
+    katavti_google_client_id: client-id
+    katavti_smtp_url: smtps://example.invalid
+    katavti_test_output_dir: "{{ playbook_dir }}/../.test-output"
+  tasks:
+    - name: Remove previous local test output
+      ansible.builtin.file:
+        path: "{{ katavti_test_output_dir }}"
+        state: absent
+
+    - name: Create local test output directory
+      ansible.builtin.file:
+        path: "{{ katavti_test_output_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Render local test artifacts
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/katavti/templates/{{ item.source }}"
+        dest: "{{ katavti_test_output_dir }}/{{ item.destination }}"
+        mode: "0600"
+      loop:
+        - {source: docker-compose.yml.j2, destination: compose.yml}
+        - {source: katavti.caddy.j2, destination: katavti.caddy}
+        - {source: production.yaml.j2, destination: production.yaml}
+        - {source: secrets.yaml.j2, destination: secrets.yaml}
+
+    - name: Validate rendered Compose model
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ katavti_test_output_dir }}/compose.yml"
+          - config
+          - --quiet
+      changed_when: false

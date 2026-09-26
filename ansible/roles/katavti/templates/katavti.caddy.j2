@@ -1,0 +1,10 @@
+{{ katavti_domain_name }} {
+  @api path {{ katavti_api_base_path }} {{ katavti_api_base_path }}/*
+  handle @api {
+    reverse_proxy {{ katavti_server_container_name }}:{{ katavti_server_port }}
+  }
+
+  handle {
+    reverse_proxy {{ katavti_client_container_name }}:{{ katavti_client_port }}
+  }
+}

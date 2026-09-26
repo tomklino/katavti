@@ -1,0 +1,74 @@
+---
+- name: List Git release tags in version order
+  ansible.builtin.command:
+    argv: [git, -C, "{{ katavti_images_source_dir }}", tag, --sort=-version:refname]
+  register: katavti_images_git_tags
+  changed_when: false
+
+- name: Require a release tag
+  ansible.builtin.assert:
+    that: katavti_images_git_tags.stdout_lines | length > 0
+    fail_msg: Create a release tag before publishing or deploying immutable images.
+
+- name: Select immutable image references
+  ansible.builtin.set_fact:
+    katavti_images_release_tag: "{{ katavti_images_git_tags.stdout_lines[0] }}"
+    katavti_images_client_reference: >-
+      {{ katavti_images_registry_namespace }}/katavti-client:{{ katavti_images_git_tags.stdout_lines[0] }}
+    katavti_images_server_reference: >-
+      {{ katavti_images_registry_namespace }}/katavti-server:{{ katavti_images_git_tags.stdout_lines[0] }}
+
+- name: Check published release images
+  ansible.builtin.command:
+    argv: [docker, manifest, inspect, "{{ item }}"]
+  loop:
+    - "{{ katavti_images_client_reference }}"
+    - "{{ katavti_images_server_reference }}"
+  register: katavti_images_manifests
+  changed_when: false
+  failed_when: false
+
+- name: Require images when deployment cannot build
+  when:
+    - not katavti_images_build_missing | bool
+    - katavti_images_manifests.results | selectattr('rc', 'ne', 0) | list | length > 0
+  ansible.builtin.fail:
+    msg: One or more immutable images are missing; run playbooks/build-images.yml first.
+
+- name: Build and publish missing client image
+  when:
+    - katavti_images_build_missing | bool
+    - katavti_images_manifests.results[0].rc != 0
+  ansible.builtin.command:
+    argv:
+      - docker
+      - buildx
+      - build
+      - --platform
+      - "{{ katavti_images_platform }}"
+      - --build-arg
+      - "VITE_GOOGLE_CLIENT_ID={{ katavti_images_google_client_id }}"
+      - --tag
+      - "{{ katavti_images_client_reference }}"
+      - --push
+      - "{{ katavti_images_source_dir }}/client"
+  changed_when: true
+
+- name: Build and publish missing server image
+  when:
+    - katavti_images_build_missing | bool
+    - katavti_images_manifests.results[1].rc != 0
+  ansible.builtin.command:
+    argv:
+      - docker
+      - buildx
+      - build
+      - --platform
+      - "{{ katavti_images_platform }}"
+      - --file
+      - "{{ katavti_images_source_dir }}/server/Dockerfile"
+      - --tag
+      - "{{ katavti_images_server_reference }}"
+      - --push
+      - "{{ katavti_images_source_dir }}"
+  changed_when: true

@@ -1,0 +1,22 @@
+---
+environmentType: {{ katavti_environment_type }}
+server:
+  host: 0.0.0.0
+  port: {{ katavti_server_port }}
+storage:
+  dataDir: {{ katavti_container_data_dir }}
+http:
+  cors:
+    origins: {{ katavti_cors_origins | to_json }}
+    allowLoopbackInDevelopment: false
+  identity:
+    headerName: {{ katavti_identity_header_name }}
+api:
+  basePath: {{ katavti_api_base_path }}
+auth:
+  googleClientId: {{ katavti_google_client_id | to_json }}
+  magicLinkBaseUrl: {{ katavti_magic_link_base_url | to_json }}
+  mailFrom: {{ katavti_mail_from | to_json }}
+config:
+  files: []
+  secretFiles: []

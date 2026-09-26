@@ -1,0 +1,38 @@
+---
+- name: Select the existing Katavti deployment target
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Require an explicitly configured target
+      ansible.builtin.assert:
+        that:
+          - katavti_existing_host | default('') | length > 0
+        fail_msg: >-
+          Set katavti_existing_host in a private inventory; deployment target
+          discovery is intentionally disabled.
+
+    - name: Read immutable Katavti image references
+      ansible.builtin.include_role:
+        name: katavti_images
+      vars:
+        katavti_images_build_missing: false
+
+    - name: Add the explicitly selected target
+      ansible.builtin.add_host:
+        name: katavti_target
+        groups: katavti_hosts
+        ansible_host: "{{ katavti_existing_host }}"
+        ansible_user: "{{ katavti_existing_user }}"
+        ansible_port: "{{ katavti_ssh_port }}"
+        katavti_client_image: "{{ katavti_images_client_reference }}"
+        katavti_server_image: "{{ katavti_images_server_reference }}"
+
+- name: Safely deploy Katavti beside existing applications
+  hosts: katavti_hosts
+  become: true
+  gather_facts: true
+  roles:
+    - role: katavti_docker
+      when: katavti_manage_docker | bool
+    - role: katavti

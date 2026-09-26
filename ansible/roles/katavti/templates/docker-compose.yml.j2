@@ -1,0 +1,35 @@
+---
+services:
+  client:
+    image: "{{ katavti_client_image }}"
+    pull_policy: always
+    container_name: "{{ katavti_client_container_name }}"
+    restart: unless-stopped
+    networks: [proxy]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:{{ katavti_client_port }}/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  server:
+    image: "{{ katavti_server_image }}"
+    pull_policy: always
+    container_name: "{{ katavti_server_container_name }}"
+    restart: unless-stopped
+    user: "{{ katavti_system_uid }}:{{ katavti_system_gid }}"
+    environment:
+      KATAVTI_CONFIG_FILES: /config/production.yaml
+      KATAVTI_CONFIG_SECRET_FILES: /config/secrets.yaml
+    volumes:
+      - "{{ katavti_data_dir }}:{{ katavti_container_data_dir }}"
+      - "{{ katavti_config_dir }}:/config:ro"
+    networks: [proxy]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:{{ katavti_server_port }}{{ katavti_api_base_path }}/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+networks:
+  proxy:
+    external: true
+    name: "{{ katavti_shared_network_name }}"
