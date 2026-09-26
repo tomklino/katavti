@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: katavti-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: katavti-client
+  template:
+    metadata:
+      labels:
+        app: katavti-client
+    spec:
+      containers:
+        - name: client
+          image: katavti-client:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: katavti-client
+spec:
+  selector:
+    app: katavti-client
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: katavti-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: katavti-server
+  template:
+    metadata:
+      labels:
+        app: katavti-server
+    spec:
+      containers:
+        - name: server
+          image: katavti-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3030
+          env:
+            - name: KATAVTI_SERVER_HOST
+              value: 0.0.0.0
+            # Explicitly override Kubernetes' legacy KATAVTI_SERVER_PORT service-link variable.
+            - name: KATAVTI_SERVER_PORT
+              value: "3030"
+            - name: KATAVTI_STORAGE_DATA_DIR
+              value: /data
+            - name: KATAVTI_AUTH_MAGIC_LINK_BASE_URL
+              value: http://katavti.local
+            - name: KATAVTI_AUTH_MAIL_FROM
+              value: Katavti <no-reply@katavti.local>
+          readinessProbe:
+            httpGet:
+              path: /api/v1beta/health
+              port: http
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: katavti-server
+spec:
+  selector:
+    app: katavti-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,24 @@
+import { describe, expect, it, vi } from 'vitest'
+import { createAuthService } from '../../src/services/auth-service.js'
+
+describe('auth service magic links', () => {
+  it('sends a one-use link and creates a session for its email', async () => {
+    const sendMail = vi.fn().mockResolvedValue(undefined)
+    const auth = createAuthService({ magicLinkBaseUrl: 'http://katavti.local', mailFrom: 'test@katavti.local', sendMail, now: () => 1000 })
+    await auth.requestMagicLink('Alice@Example.com')
+    const url = new URL(sendMail.mock.calls[0][0].text.split(': ').at(-1))
+    const result = auth.consumeMagicLink(url.searchParams.get('token')!)
+    expect(result.user.email).toBe('alice@example.com')
+    expect(auth.userForSession(result.session)).toEqual(result.user)
+    expect(() => auth.consumeMagicLink(url.searchParams.get('token')!)).toThrow(/invalid or expired/)
+  })
+
+  it('rejects an expired link', async () => {
+    let now = 1000
+    const auth = createAuthService({ magicLinkBaseUrl: 'http://katavti.local', mailFrom: 'test@katavti.local', now: () => now })
+    const result = await auth.requestMagicLink('alice@example.com')
+    now += 16 * 60_000
+    const token = new URL(result.developmentUrl!).searchParams.get('token')!
+    expect(() => auth.consumeMagicLink(token)).toThrow(/invalid or expired/)
+  })
+})

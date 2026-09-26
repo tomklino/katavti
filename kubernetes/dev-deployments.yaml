@@ -1,0 +1,94 @@
+# Local K3s development deployments. The working tree and its installed dependencies
+# are mounted directly from the host; Vite and tsx watch source files for changes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: katavti-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: katavti-client
+  template:
+    metadata:
+      labels:
+        app: katavti-client
+    spec:
+      containers:
+        - name: client
+          image: node:22-bookworm-slim
+          imagePullPolicy: IfNotPresent
+          workingDir: /workspace/katavti/client
+          command: [npm, run, dev]
+          env:
+            # Polling makes file watching reliable across hostPath mounts.
+            - name: WATCHPACK_POLLING
+              value: "true"
+            - name: CHOKIDAR_USEPOLLING
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          volumeMounts:
+            - name: source
+              mountPath: /workspace/katavti
+      volumes:
+        - name: source
+          hostPath:
+            path: /home/tom/workspace/katavti
+            type: Directory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: katavti-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: katavti-server
+  template:
+    metadata:
+      labels:
+        app: katavti-server
+    spec:
+      containers:
+        - name: server
+          image: node:22-bookworm-slim
+          imagePullPolicy: IfNotPresent
+          workingDir: /workspace/katavti
+          command: [npm, run, dev:server]
+          env:
+            - name: KATAVTI_SERVER_HOST
+              value: 0.0.0.0
+            - name: KATAVTI_SERVER_PORT
+              value: "3030"
+            - name: KATAVTI_STORAGE_DATA_DIR
+              value: /data
+            - name: KATAVTI_AUTH_MAGIC_LINK_BASE_URL
+              value: http://katavti.local
+            - name: KATAVTI_AUTH_MAIL_FROM
+              value: Katavti <no-reply@katavti.local>
+          ports:
+            - name: http
+              containerPort: 3030
+          readinessProbe:
+            httpGet:
+              path: /api/v1beta/health
+              port: http
+          volumeMounts:
+            - name: source
+              mountPath: /workspace/katavti
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: source
+          hostPath:
+            path: /home/tom/workspace/katavti
+            type: Directory
+        - name: data
+          emptyDir: {}

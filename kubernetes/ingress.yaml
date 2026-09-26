@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: katavti
+spec:
+  rules:
+    - host: katavti.local
+      http:
+        paths:
+          # Prefix matching gives the API precedence over the client catch-all.
+          - path: /api/v1beta
+            pathType: Prefix
+            backend:
+              service:
+                name: katavti-server
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: katavti-client
+                port:
+                  name: http

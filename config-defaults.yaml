@@ -1,0 +1,23 @@
+environmentType: dev
+server:
+  host: 127.0.0.1
+  port: 3030
+storage:
+  dataDir: ./data
+http:
+  cors:
+    origins:
+      - http://localhost:8080
+    allowLoopbackInDevelopment: true
+  identity:
+    headerName: x-user-id
+api:
+  basePath: /api/v1beta
+auth:
+  googleClientId: ""
+  magicLinkBaseUrl: http://katavti.local
+  smtpUrl: ""
+  mailFrom: Katavti <no-reply@katavti.local>
+config:
+  files: []
+  secretFiles: []

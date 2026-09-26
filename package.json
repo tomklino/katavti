@@ -1,0 +1,32 @@
+{
+  "name": "katavti",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm --prefix client run serve\"",
+    "dev:server": "tsx watch server/src/server.ts",
+    "build": "npm run build:server && npm --prefix client run build",
+    "build:server": "tsc -p server/tsconfig.json",
+    "start": "node dist/server/server.js",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "vitest run server/test",
+    "test:client": "npm --prefix client run test:unit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "google-auth-library": "^11.1.0",
+    "hono": "^4.13.9",
+    "nodemailer": "^10.0.10",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/nodemailer": "^8.0.2",
+    "concurrently": "^10.0.5",
+    "playwright": "^1.63.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  }
+}
