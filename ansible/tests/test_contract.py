@@ -43,6 +43,9 @@ class DeploymentContractTest(unittest.TestCase):
     def render(self, name, **overrides):
         return self.jinja.get_template(name).render(**(VARS | overrides))
 
+    def test_generated_python_files_are_absent(self):
+        self.assertEqual([], list(ROOT.rglob("__pycache__")) + list(ROOT.rglob("*.pyc")))
+
     def test_required_files_exist(self):
         required = [
             "ansible.cfg", "requirements.yml", "README.md",
