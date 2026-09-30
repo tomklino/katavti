@@ -46,21 +46,35 @@
     katavti_candidate_dir: "{{ katavti_releases_dir }}/{{ katavti_candidate_slot }}"
     katavti_candidate_route: "{{ katavti_staging_dir }}/katavti.{{ katavti_candidate_slot }}.candidate"
     katavti_previous_route: "{{ katavti_staging_dir }}/katavti.previous"
+    katavti_previous_legacy_route: "{{ katavti_staging_dir }}/workspace-notes.previous"
 
 - name: Ensure Katavti system group exists
   ansible.builtin.group:
     name: "{{ katavti_system_user }}"
-    gid: "{{ katavti_system_gid }}"
     system: true
 
 - name: Ensure Katavti system user exists
   ansible.builtin.user:
     name: "{{ katavti_system_user }}"
-    uid: "{{ katavti_system_uid }}"
     group: "{{ katavti_system_user }}"
     system: true
     create_home: false
     shell: /usr/sbin/nologin
+
+- name: Read allocated Katavti user ID
+  ansible.builtin.command: "id -u {{ katavti_system_user }}"
+  register: katavti_system_uid_result
+  changed_when: false
+
+- name: Read allocated Katavti group ID
+  ansible.builtin.command: "id -g {{ katavti_system_user }}"
+  register: katavti_system_gid_result
+  changed_when: false
+
+- name: Publish allocated Katavti user and group IDs
+  ansible.builtin.set_fact:
+    katavti_system_uid: "{{ katavti_system_uid_result.stdout }}"
+    katavti_system_gid: "{{ katavti_system_gid_result.stdout }}"
 
 - name: Ensure Katavti directories exist
   ansible.builtin.file:

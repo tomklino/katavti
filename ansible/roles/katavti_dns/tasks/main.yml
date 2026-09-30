@@ -1,0 +1,31 @@
+---
+- name: Skip DNS management unless enabled
+  when: not (katavti_dns_enabled | bool)
+  ansible.builtin.debug:
+    msg: Katavti DNS management is disabled
+
+- name: Validate DNS configuration
+  when: katavti_dns_enabled | bool
+  ansible.builtin.assert:
+    that:
+      - katavti_dns_target | length > 0
+      - katavti_dns_project | length > 0
+      - katavti_dns_managed_zone | length > 0
+      - katavti_dns_managed_zone_dns_name | length > 0
+      - katavti_domain_name | length > 0
+
+- name: Ensure public DNS record exists
+  when: katavti_dns_enabled | bool
+  google.cloud.gcp_dns_resource_record_set:
+    project: "{{ katavti_dns_project }}"
+    auth_kind: "{{ katavti_dns_auth_kind }}"
+    service_account_file: "{{ katavti_dns_credentials_file | default(omit, true) }}"
+    managed_zone:
+      name: "{{ katavti_dns_managed_zone }}"
+      dnsName: "{{ katavti_dns_managed_zone_dns_name }}"
+    name: "{{ katavti_domain_name }}."
+    type: "{{ katavti_dns_record_type }}"
+    ttl: "{{ katavti_dns_ttl }}"
+    target:
+      - "{{ katavti_dns_target }}"
+    state: present

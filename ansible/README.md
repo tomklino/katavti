@@ -5,7 +5,8 @@ This directory builds immutable release images and performs a blue-green deploym
 ## Safety model
 
 - The target host must be explicit; cloud discovery and provisioning are intentionally absent.
-- `site.yml` never builds, pushes, removes an old release, restarts Caddy, changes Docker, or changes DNS.
+- `site.yml` never builds, pushes, removes an old release, restarts Caddy, or changes Docker.
+- DNS management is explicit and limited to Katavti's hostname in the configured Google Cloud DNS zone.
 - The inactive blue/green slot is started and checked before traffic changes.
 - Only `katavti.caddy` is managed. Its hostname-scoped catch-all cannot match Bifrost or another hostname.
 - The complete Caddy configuration is validated before a graceful reload.
@@ -27,7 +28,7 @@ cd ansible
 ../.venv-ansible/bin/yamllint .
 ```
 
-`test-local.yml` only renders files under `ansible/.test-output` and runs `docker compose config`; it does not start containers or contact a server. No cloud CLI is used by these playbooks.
+`test-local.yml` only renders files under `ansible/.test-output` and runs `docker compose config`; it does not start containers or contact a server. `site.yml` uses the Google Cloud collection to manage DNS without invoking a cloud CLI.
 
 ## Release and deployment
 

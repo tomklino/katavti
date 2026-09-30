@@ -28,6 +28,12 @@
         katavti_client_image: "{{ katavti_images_client_reference }}"
         katavti_server_image: "{{ katavti_images_server_reference }}"
 
+    - name: Configure public DNS
+      ansible.builtin.include_role:
+        name: katavti_dns
+      vars:
+        katavti_dns_target: "{{ katavti_existing_host }}"
+
 - name: Safely deploy Katavti beside existing applications
   hosts: katavti_hosts
   become: true

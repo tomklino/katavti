@@ -52,6 +52,7 @@ class DeploymentContractTest(unittest.TestCase):
             "inventories/example/hosts.yml", "inventories/example/group_vars/all.yml",
             "playbooks/build-images.yml", "playbooks/site.yml", "playbooks/test-local.yml",
             "roles/katavti/tasks/main.yml", "roles/katavti/tasks/activate.yml",
+            "roles/katavti_dns/defaults/main.yml", "roles/katavti_dns/tasks/main.yml",
             "roles/katavti/templates/docker-compose.yml.j2",
             "roles/katavti/templates/katavti.caddy.j2",
             "roles/katavti/templates/production.yaml.j2",
@@ -93,8 +94,7 @@ class DeploymentContractTest(unittest.TestCase):
     def test_activation_is_guarded_and_rollback_capable(self):
         tasks = (ROOT / "roles/katavti/tasks/activate.yml").read_text()
         for marker in ["caddy validate", "ansible.builtin.stat", "block:", "rescue:",
-                       "katavti_previous_route", "katavti_candidate_route", "verify",
-                       "Detect another Caddy route claiming the Katavti hostname"]:
+                       "katavti_previous_route", "katavti_candidate_route", "verify"]:
             self.assertIn(marker, tasks)
         self.assertNotIn("state: restarted", tasks)
         self.assertNotIn("docker compose down", tasks)
@@ -103,6 +103,16 @@ class DeploymentContractTest(unittest.TestCase):
         main = (ROOT / "roles/katavti/tasks/main.yml").read_text()
         self.assertIn('katavti_candidate_route: "{{ katavti_staging_dir }}', main)
         self.assertIn('katavti_previous_route: "{{ katavti_staging_dir }}', main)
+        self.assertIn("Remove legacy Workspace Notes route from Caddy", tasks)
+        self.assertIn("Restore legacy Workspace Notes route after failed activation", tasks)
+
+    def test_system_ids_are_allocated_by_the_target_host(self):
+        defaults = (ROOT / "roles/katavti/defaults/main.yml").read_text()
+        main = (ROOT / "roles/katavti/tasks/main.yml").read_text()
+        self.assertNotIn("katavti_system_uid:", defaults)
+        self.assertNotIn("katavti_system_gid:", defaults)
+        self.assertIn("id -u", main)
+        self.assertIn("id -g", main)
 
     def test_client_image_accepts_google_client_id_build_argument(self):
         dockerfile = (ROOT.parent / "client/Dockerfile").read_text()
@@ -114,6 +124,17 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertNotIn("buildx", site)
         self.assertNotIn("cleanup", site.lower())
         self.assertIn("katavti", site)
+
+    def test_site_manages_google_cloud_dns_for_the_explicit_target(self):
+        site = (ROOT / "playbooks/site.yml").read_text()
+        dns = (ROOT / "roles/katavti_dns/tasks/main.yml").read_text()
+        requirements = (ROOT / "requirements.yml").read_text()
+        self.assertIn("name: katavti_dns", site)
+        self.assertIn('katavti_dns_target: "{{ katavti_existing_host }}"', site)
+        self.assertIn("google.cloud.gcp_dns_resource_record_set", dns)
+        self.assertIn('name: "{{ katavti_domain_name }}."', dns)
+        self.assertIn("state: present", dns)
+        self.assertIn("google.cloud", requirements)
 
 if __name__ == "__main__":
     unittest.main()

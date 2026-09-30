@@ -7,29 +7,15 @@
     group: root
     mode: "0644"
 
-- name: Detect another Caddy route claiming the Katavti hostname
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail && grep -RFl --include='*.caddy'
-      --exclude='katavti.caddy' --exclude='.katavti.*.candidate'
-      -- {{ katavti_domain_name | quote }}
-      {{ katavti_shared_caddy_routes_dir | quote }}
-    executable: /bin/bash
-  register: katavti_conflicting_routes
-  changed_when: false
-  failed_when: katavti_conflicting_routes.rc not in [0, 1]
-
-- name: Refuse to shadow another Caddy route
-  ansible.builtin.assert:
-    that: katavti_conflicting_routes.stdout_lines | length == 0
-    fail_msg: >-
-      Another Caddy fragment already claims {{ katavti_domain_name }}:
-      {{ katavti_conflicting_routes.stdout_lines | join(', ') }}
-
 - name: Inspect the previous Katavti route
   ansible.builtin.stat:
     path: "{{ katavti_caddy_route_path }}"
   register: katavti_previous_route_stat
+
+- name: Inspect the legacy Workspace Notes route
+  ansible.builtin.stat:
+    path: "{{ katavti_legacy_caddy_route_path }}"
+  register: katavti_legacy_route_stat
 
 - name: Switch traffic with validation and automatic rollback
   block:
@@ -40,6 +26,20 @@
         src: "{{ katavti_caddy_route_path }}"
         dest: "{{ katavti_previous_route }}"
         mode: preserve
+
+    - name: Preserve legacy Workspace Notes route
+      when: katavti_legacy_route_stat.stat.exists
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ katavti_legacy_caddy_route_path }}"
+        dest: "{{ katavti_previous_legacy_route }}"
+        mode: preserve
+
+    - name: Remove legacy Workspace Notes route from Caddy
+      when: katavti_legacy_route_stat.stat.exists
+      ansible.builtin.file:
+        path: "{{ katavti_legacy_caddy_route_path }}"
+        state: absent
 
     - name: Atomically install candidate Katavti route
       ansible.builtin.copy:
@@ -125,6 +125,14 @@
       ansible.builtin.file:
         path: "{{ katavti_caddy_route_path }}"
         state: absent
+
+    - name: Restore legacy Workspace Notes route after failed activation
+      when: katavti_legacy_route_stat.stat.exists
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ katavti_previous_legacy_route }}"
+        dest: "{{ katavti_legacy_caddy_route_path }}"
+        mode: preserve
 
     - name: Validate restored complete Caddy configuration
       ansible.builtin.command:

@@ -1,0 +1,6 @@
+---
+katavti_dns_enabled: true
+katavti_dns_record_type: A
+katavti_dns_ttl: 300
+katavti_dns_auth_kind: application
+katavti_dns_credentials_file: ""

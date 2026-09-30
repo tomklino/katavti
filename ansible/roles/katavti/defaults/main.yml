@@ -1,7 +1,5 @@
 ---
 katavti_system_user: katavti
-katavti_system_uid: 991
-katavti_system_gid: 991
 katavti_base_dir: /opt/katavti
 katavti_releases_dir: "{{ katavti_base_dir }}/releases"
 katavti_config_dir: "{{ katavti_base_dir }}/config"
@@ -29,6 +27,7 @@ katavti_shared_caddy_project_dir: /opt/bifrost-stack
 katavti_shared_caddy_routes_dir: "{{ katavti_shared_caddy_project_dir }}/caddy/caddy.d"
 katavti_shared_caddy_service: caddy
 katavti_caddy_route_path: "{{ katavti_shared_caddy_routes_dir }}/katavti.caddy"
+katavti_legacy_caddy_route_path: "{{ katavti_shared_caddy_routes_dir }}/workspace-notes.caddy"
 katavti_health_retries: 12
 katavti_health_delay: 5
 katavti_keep_previous_release: true
