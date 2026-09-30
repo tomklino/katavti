@@ -33,6 +33,4 @@
   become: true
   gather_facts: true
   roles:
-    - role: katavti_docker
-      when: katavti_manage_docker | bool
     - role: katavti

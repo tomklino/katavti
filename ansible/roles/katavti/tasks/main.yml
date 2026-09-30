@@ -1,4 +1,12 @@
 ---
+- name: Refuse implicit Docker management on a shared host
+  ansible.builtin.assert:
+    that:
+      - not (katavti_manage_docker | default(false) | bool)
+    fail_msg: >-
+      Docker management is intentionally unsupported on the shared host;
+      provision it separately.
+
 - name: Validate Katavti deployment configuration
   ansible.builtin.assert:
     that:
