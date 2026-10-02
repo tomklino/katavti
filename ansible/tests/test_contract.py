@@ -109,6 +109,10 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("client_id={{ katavti_key_vault_managed_identity_client_id", fetcher)
         self.assertIn("katavti_key_vault_google_client_id_secret", fetcher)
         self.assertIn("katavti_key_vault_smtp_url_secret", fetcher)
+        self.assertIn("katavti_key_vault_smtp_oauth_client_id_secret", fetcher)
+        self.assertIn("katavti_key_vault_smtp_oauth_client_secret_secret", fetcher)
+        self.assertIn("katavti_key_vault_smtp_oauth_refresh_token_secret", fetcher)
+        self.assertIn('"smtpOAuth"', fetcher)
         self.assertNotIn("az keyvault", fetcher)
 
     def test_system_ids_are_allocated_by_the_target_host(self):

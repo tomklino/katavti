@@ -19,8 +19,12 @@ katavti_images_publish_public: true
 katavti_key_vault_name: lutravault-pi-ai
 katavti_key_vault_managed_identity_client_id: f06e546a-25b7-4367-807a-5a8663f84f6b
 katavti_key_vault_google_client_id_secret: katavti-google-client-id
-katavti_smtp_enabled: false
+katavti_smtp_mode: disabled
 katavti_key_vault_smtp_url_secret: katavti-smtp-url
+katavti_key_vault_smtp_oauth_user_secret: katavti-smtp-oauth-user
+katavti_key_vault_smtp_oauth_client_id_secret: katavti-smtp-oauth-client-id
+katavti_key_vault_smtp_oauth_client_secret_secret: katavti-smtp-oauth-client-secret
+katavti_key_vault_smtp_oauth_refresh_token_secret: katavti-smtp-oauth-refresh-token
 katavti_mail_from: Katavti <no-reply@katavti.klino.me>
 katavti_base_dir: /opt/katavti
 katavti_data_dir: /var/lib/katavti/notes

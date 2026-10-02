@@ -13,6 +13,31 @@ describe('auth service magic links', () => {
     expect(() => auth.consumeMagicLink(url.searchParams.get('token')!)).toThrow(/invalid or expired/)
   })
 
+  it('configures Gmail SMTP with OAuth2 credentials', async () => {
+    const createTransport = vi.spyOn((await import('nodemailer')).default, 'createTransport').mockReturnValue({ sendMail: vi.fn() } as never)
+    createAuthService({
+      magicLinkBaseUrl: 'https://katavti.test',
+      mailFrom: 'katavti@klino.me',
+      smtpOAuth: {
+        user: 'katavti@klino.me',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        refreshToken: 'refresh-token',
+      },
+    })
+    expect(createTransport).toHaveBeenCalledWith({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: 'katavti@klino.me',
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        refreshToken: 'refresh-token',
+      },
+    })
+    createTransport.mockRestore()
+  })
+
   it('rejects email sign-in when SMTP is not configured in production', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     const auth = createAuthService({ magicLinkBaseUrl: 'https://katavti.test', mailFrom: 'test@katavti.test' })

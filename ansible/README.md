@@ -32,4 +32,6 @@ cd ansible
 
 ## Release and deployment
 
-Create a release tag, then explicitly run `build-images.yml` to publish missing images. Copy the example inventory outside the repository and review it before running `site.yml`. On the target Azure VM, Katavti uses its managed identity to fetch runtime secrets directly from Azure Key Vault; secret values do not pass through Ansible. SMTP is disabled by default, so production email sign-in is rejected rather than exposing a development link; enable it only after storing `katavti-smtp-url` in Key Vault. Running deployment is intentionally outside local validation.
+Create a release tag, then explicitly run `build-images.yml` to publish missing images. Copy the example inventory outside the repository and review it before running `site.yml`. On the target Azure VM, Katavti uses its managed identity to fetch runtime secrets directly from Azure Key Vault; secret values do not pass through Ansible. SMTP is disabled by default, so production email sign-in is rejected rather than exposing a development link.
+
+For Gmail OAuth2 delivery, set `katavti_smtp_mode: gmail_oauth2` and store the mailbox, OAuth client ID, OAuth client secret, and refresh token in `katavti-smtp-oauth-user`, `katavti-smtp-oauth-client-id`, `katavti-smtp-oauth-client-secret`, and `katavti-smtp-oauth-refresh-token`. The legacy SMTP URL mode remains available as `katavti_smtp_mode: url`. Running deployment is intentionally outside local validation.

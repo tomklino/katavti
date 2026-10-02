@@ -14,7 +14,13 @@ export interface AppConfig {
     identity: { headerName: string }
   }
   api: { basePath: string }
-  auth: { googleClientId: string; magicLinkBaseUrl: string; smtpUrl: string; mailFrom: string }
+  auth: {
+    googleClientId: string
+    magicLinkBaseUrl: string
+    smtpUrl: string
+    smtpOAuth?: { user: string; clientId: string; clientSecret: string; refreshToken: string }
+    mailFrom: string
+  }
   config: { files: string[]; secretFiles: string[] }
 }
 

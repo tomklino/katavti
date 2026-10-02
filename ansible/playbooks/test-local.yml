@@ -28,8 +28,12 @@
     katavti_key_vault_name: example-vault
     katavti_key_vault_managed_identity_client_id: 00000000-0000-0000-0000-000000000000
     katavti_key_vault_google_client_id_secret: katavti-google-client-id
-    katavti_smtp_enabled: false
+    katavti_smtp_mode: disabled
     katavti_key_vault_smtp_url_secret: katavti-smtp-url
+    katavti_key_vault_smtp_oauth_user_secret: katavti-smtp-oauth-user
+    katavti_key_vault_smtp_oauth_client_id_secret: katavti-smtp-oauth-client-id
+    katavti_key_vault_smtp_oauth_client_secret_secret: katavti-smtp-oauth-client-secret
+    katavti_key_vault_smtp_oauth_refresh_token_secret: katavti-smtp-oauth-refresh-token
     katavti_test_output_dir: "{{ playbook_dir }}/../.test-output"
   tasks:
     - name: Remove previous local test output

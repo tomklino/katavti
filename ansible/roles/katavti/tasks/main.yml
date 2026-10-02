@@ -17,7 +17,12 @@
       - katavti_key_vault_name | length > 0
       - katavti_key_vault_managed_identity_client_id | length > 0
       - katavti_key_vault_google_client_id_secret | length > 0
-      - not (katavti_smtp_enabled | bool) or katavti_key_vault_smtp_url_secret | length > 0
+      - katavti_smtp_mode in ['disabled', 'url', 'gmail_oauth2']
+      - katavti_smtp_mode != 'url' or katavti_key_vault_smtp_url_secret | length > 0
+      - katavti_smtp_mode != 'gmail_oauth2' or katavti_key_vault_smtp_oauth_user_secret | length > 0
+      - katavti_smtp_mode != 'gmail_oauth2' or katavti_key_vault_smtp_oauth_client_id_secret | length > 0
+      - katavti_smtp_mode != 'gmail_oauth2' or katavti_key_vault_smtp_oauth_client_secret_secret | length > 0
+      - katavti_smtp_mode != 'gmail_oauth2' or katavti_key_vault_smtp_oauth_refresh_token_secret | length > 0
       - katavti_data_dir.startswith('/')
       - katavti_shared_caddy_routes_dir.startswith('/')
     fail_msg: >-

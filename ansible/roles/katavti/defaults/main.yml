@@ -23,8 +23,12 @@ katavti_magic_link_base_url: "https://{{ katavti_domain_name }}"
 katavti_key_vault_name: ""
 katavti_key_vault_managed_identity_client_id: ""
 katavti_key_vault_google_client_id_secret: katavti-google-client-id
-katavti_smtp_enabled: false
+katavti_smtp_mode: disabled
 katavti_key_vault_smtp_url_secret: katavti-smtp-url
+katavti_key_vault_smtp_oauth_user_secret: katavti-smtp-oauth-user
+katavti_key_vault_smtp_oauth_client_id_secret: katavti-smtp-oauth-client-id
+katavti_key_vault_smtp_oauth_client_secret_secret: katavti-smtp-oauth-client-secret
+katavti_key_vault_smtp_oauth_refresh_token_secret: katavti-smtp-oauth-refresh-token
 katavti_mail_from: "Katavti <no-reply@{{ katavti_domain_name }}>"
 katavti_client_image: ""
 katavti_server_image: ""
