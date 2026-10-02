@@ -138,3 +138,41 @@
       - --push
       - "{{ katavti_images_source_dir }}"
   changed_when: true
+
+- name: Validate public Docker Hub publication settings
+  when:
+    - katavti_images_build_missing | bool
+    - katavti_images_publish_public | bool
+  ansible.builtin.assert:
+    that:
+      - katavti_images_registry_namespace is match('^(?:docker\\.io/)?[a-z0-9][a-z0-9_-]*$')
+    fail_msg: Automatic public repository configuration currently supports Docker Hub namespaces only.
+
+- name: Read local Docker credentials for public repository configuration
+  when:
+    - katavti_images_build_missing | bool
+    - katavti_images_publish_public | bool
+  ansible.builtin.slurp:
+    src: "{{ katavti_images_docker_config }}"
+  register: katavti_images_docker_config_content
+  no_log: true
+
+- name: Publish Docker Hub repositories publicly
+  when:
+    - katavti_images_build_missing | bool
+    - katavti_images_publish_public | bool
+  ansible.builtin.uri:
+    url: >-
+      https://hub.docker.com/v2/repositories/{{ katavti_images_registry_namespace | regex_replace('^docker.io/', '') }}/{{ item }}/
+    method: PATCH
+    headers:
+      Authorization: >-
+        Bearer {{ ((katavti_images_docker_config_content.content | b64decode | from_json).auths['https://index.docker.io/v1/access-token'].auth | b64decode).split(':', 1)[1] }}
+    body_format: json
+    body:
+      is_private: false
+    status_code: 200
+  loop:
+    - katavti-client
+    - katavti-server
+  no_log: true

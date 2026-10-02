@@ -5,3 +5,5 @@ katavti_images_platform: linux/amd64
 katavti_images_build_missing: false
 katavti_images_key_vault_name: ""
 katavti_images_google_client_id_secret: katavti-google-client-id
+katavti_images_publish_public: true
+katavti_images_docker_config: "{{ lookup('env', 'DOCKER_CONFIG') | default(lookup('env', 'HOME') + '/.docker', true) }}/config.json"

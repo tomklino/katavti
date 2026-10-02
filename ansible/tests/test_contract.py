@@ -134,6 +134,8 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("katavti_images_worktree.stdout | length == 0", tasks)
         self.assertIn("az", tasks)
         self.assertIn("katavti_images_google_client_id_secret", tasks)
+        self.assertIn("is_private: false", tasks)
+        self.assertIn("hub.docker.com/v2/repositories", tasks)
         self.assertIn("no_log: true", tasks)
 
     def test_site_does_not_build_images_or_clean_old_slot(self):
