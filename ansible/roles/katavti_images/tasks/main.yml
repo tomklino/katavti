@@ -157,6 +157,23 @@
   register: katavti_images_docker_config_content
   no_log: true
 
+- name: Authenticate with the Docker Hub API
+  when:
+    - katavti_images_build_missing | bool
+    - katavti_images_publish_public | bool
+  ansible.builtin.uri:
+    url: https://hub.docker.com/v2/users/login/
+    method: POST
+    body_format: json
+    body:
+      username: >-
+        {{ ((katavti_images_docker_config_content.content | b64decode | from_json).auths['https://index.docker.io/v1/'].auth | b64decode).split(':', 1)[0] }}
+      password: >-
+        {{ ((katavti_images_docker_config_content.content | b64decode | from_json).auths['https://index.docker.io/v1/'].auth | b64decode).split(':', 1)[1] }}
+    status_code: 200
+  register: katavti_images_docker_hub_login
+  no_log: true
+
 - name: Publish Docker Hub repositories publicly
   when:
     - katavti_images_build_missing | bool
@@ -166,8 +183,7 @@
       https://hub.docker.com/v2/repositories/{{ katavti_images_registry_namespace | regex_replace('^docker.io/', '') }}/{{ item }}/
     method: PATCH
     headers:
-      Authorization: >-
-        Bearer {{ ((katavti_images_docker_config_content.content | b64decode | from_json).auths['https://index.docker.io/v1/access-token'].auth | b64decode).split(':', 1)[1] }}
+      Authorization: "JWT {{ katavti_images_docker_hub_login.json.token }}"
     body_format: json
     body:
       is_private: false
