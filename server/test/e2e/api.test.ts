@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { Server } from 'node:http'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startServer } from '../../src/server.js'
 import type { AppConfig } from '../../src/config/index.js'
 
@@ -12,6 +12,8 @@ let origin: string
 let headers: Record<string, string>
 
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-28T12:00:00.000Z'))
   dataDir = await mkdtemp(path.join(tmpdir(), 'katavti-'))
   const config: AppConfig = {
     environmentType: 'dev',
@@ -31,6 +33,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
   await rm(dataDir, { recursive: true, force: true })
+  vi.useRealTimers()
 })
 
 async function json(url: string, init?: RequestInit) {
@@ -65,7 +68,7 @@ describe('API end to end', () => {
     })
     expect(updated.response.status).toBe(200)
 
-    const listed = await json('/api/v1beta/notes?days=30', { headers })
+    const listed = await json('/api/v1beta/notes?days=5', { headers })
     expect(listed.body).toContain(id)
 
     const note = await json(`/api/v1beta/notes/${id}`, { headers })

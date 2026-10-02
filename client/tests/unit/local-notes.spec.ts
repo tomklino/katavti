@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { backUpLocalNotes, createLocalNotesApi, createSyncedNotesApi } from '@/api/local-notes'
 
 function memoryStorage(): Storage {
@@ -7,13 +7,20 @@ function memoryStorage(): Storage {
 }
 
 describe('local notes', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-28T12:00:00.000Z'))
+  })
+
+  afterEach(() => vi.useRealTimers())
+
   it('creates and saves date-structured notes in browser storage', async () => {
     const api = createLocalNotesApi(memoryStorage())
     const [id] = await api.createDaily(1, '2026-09-26')
     await api.update(id, '# Local note')
     expect(decodeURIComponent(id)).toBe('2026/september.d/workspaces-2026-09-26/workspace-1.md')
     expect((await api.read(id)).content).toBe('# Local note')
-    expect(await api.list({ days: 30 })).toContain(id)
+    expect(await api.list({ days: 5 })).toContain(id)
   })
 
   it('keeps additional notes visible when the daily view reloads its initial count', async () => {
