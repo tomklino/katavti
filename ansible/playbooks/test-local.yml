@@ -12,6 +12,7 @@
     katavti_server_image: example/katavti-server:v0.2.0
     katavti_server_port: 3030
     katavti_client_port: 8080
+    katavti_system_user: katavti
     katavti_system_uid: 991
     katavti_system_gid: 991
     katavti_data_dir: /var/lib/katavti/notes
@@ -24,8 +25,11 @@
     katavti_api_base_path: /api/v1beta
     katavti_magic_link_base_url: https://katavti.example.test
     katavti_mail_from: Katavti <no-reply@example.test>
-    katavti_google_client_id: client-id
-    katavti_smtp_url: smtps://example.invalid
+    katavti_key_vault_name: example-vault
+    katavti_key_vault_managed_identity_client_id: 00000000-0000-0000-0000-000000000000
+    katavti_key_vault_google_client_id_secret: katavti-google-client-id
+    katavti_smtp_enabled: false
+    katavti_key_vault_smtp_url_secret: katavti-smtp-url
     katavti_test_output_dir: "{{ playbook_dir }}/../.test-output"
   tasks:
     - name: Remove previous local test output
@@ -48,7 +52,15 @@
         - {source: docker-compose.yml.j2, destination: compose.yml}
         - {source: katavti.caddy.j2, destination: katavti.caddy}
         - {source: production.yaml.j2, destination: production.yaml}
-        - {source: secrets.yaml.j2, destination: secrets.yaml}
+        - {source: fetch-key-vault-secrets.sh.j2, destination: fetch-key-vault-secrets}
+
+    - name: Validate rendered secret fetcher shell syntax
+      ansible.builtin.command:
+        argv:
+          - bash
+          - -n
+          - "{{ katavti_test_output_dir }}/fetch-key-vault-secrets"
+      changed_when: false
 
     - name: Validate rendered Compose model
       ansible.builtin.command:

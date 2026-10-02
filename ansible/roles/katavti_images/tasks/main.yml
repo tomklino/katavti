@@ -18,6 +18,72 @@
     katavti_images_server_reference: >-
       {{ katavti_images_registry_namespace }}/katavti-server:{{ katavti_images_git_tags.stdout_lines[0] }}
 
+- name: Read release tag at HEAD before building
+  when: katavti_images_build_missing | bool
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ katavti_images_source_dir }}"
+      - describe
+      - --tags
+      - --exact-match
+      - HEAD
+  register: katavti_images_head_tag
+  changed_when: false
+  failed_when: false
+
+- name: Check working tree before building
+  when: katavti_images_build_missing | bool
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ katavti_images_source_dir }}"
+      - status
+      - --porcelain
+  register: katavti_images_worktree
+  changed_when: false
+
+- name: Require an exact clean release checkout before building
+  when: katavti_images_build_missing | bool
+  ansible.builtin.assert:
+    that:
+      - katavti_images_head_tag.rc == 0
+      - katavti_images_head_tag.stdout == katavti_images_release_tag
+      - katavti_images_worktree.stdout | length == 0
+    fail_msg: >-
+      Check out the latest release tag {{ katavti_images_release_tag }} with a
+      clean working tree before building images.
+
+- name: Validate client build secret source
+  when: katavti_images_build_missing | bool
+  ansible.builtin.assert:
+    that:
+      - katavti_images_key_vault_name | length > 0
+      - katavti_images_google_client_id_secret | length > 0
+    fail_msg: Configure the Azure Key Vault used for the Google client ID.
+
+- name: Read Google client ID from Azure Key Vault for the client build
+  when: katavti_images_build_missing | bool
+  ansible.builtin.command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ katavti_images_key_vault_name }}"
+      - --name
+      - "{{ katavti_images_google_client_id_secret }}"
+      - --query
+      - value
+      - --output
+      - tsv
+  register: katavti_images_google_client_id_result
+  changed_when: false
+  no_log: true
+
 - name: Check published release images
   ansible.builtin.command:
     argv: [docker, manifest, inspect, "{{ item }}"]
@@ -47,7 +113,7 @@
       - --platform
       - "{{ katavti_images_platform }}"
       - --build-arg
-      - "VITE_GOOGLE_CLIENT_ID={{ katavti_images_google_client_id }}"
+      - "VITE_GOOGLE_CLIENT_ID={{ katavti_images_google_client_id_result.stdout }}"
       - --tag
       - "{{ katavti_images_client_reference }}"
       - --push

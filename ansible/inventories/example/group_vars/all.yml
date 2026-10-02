@@ -13,8 +13,13 @@ katavti_dns_managed_zone_dns_name: klino.me.
 katavti_dns_credentials_file: ""
 katavti_images_registry_namespace: docker.io/lutraman
 katavti_images_platform: linux/amd64
-katavti_images_google_client_id: ""
-katavti_smtp_url: ""
+katavti_images_key_vault_name: lutravault-pi-ai
+katavti_images_google_client_id_secret: katavti-google-client-id
+katavti_key_vault_name: lutravault-pi-ai
+katavti_key_vault_managed_identity_client_id: f06e546a-25b7-4367-807a-5a8663f84f6b
+katavti_key_vault_google_client_id_secret: katavti-google-client-id
+katavti_smtp_enabled: false
+katavti_key_vault_smtp_url_secret: katavti-smtp-url
 katavti_mail_from: Katavti <no-reply@katavti.klino.me>
 katavti_base_dir: /opt/katavti
 katavti_data_dir: /var/lib/katavti/notes

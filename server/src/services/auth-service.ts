@@ -29,6 +29,9 @@ export function createAuthService(options: {
   const sendMail = options.sendMail ?? (transport ? (message => transport.sendMail(message)) : undefined)
 
   async function requestMagicLink(rawEmail: string) {
+    if (!sendMail && process.env.NODE_ENV === 'production') {
+      throw new Error('Email sign-in is not configured')
+    }
     const email = normalizedEmail(rawEmail)
     const token = randomBytes(32).toString('base64url')
     pending.set(token, { email, expiresAt: now() + 15 * 60_000 })

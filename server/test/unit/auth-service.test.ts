@@ -13,6 +13,13 @@ describe('auth service magic links', () => {
     expect(() => auth.consumeMagicLink(url.searchParams.get('token')!)).toThrow(/invalid or expired/)
   })
 
+  it('rejects email sign-in when SMTP is not configured in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const auth = createAuthService({ magicLinkBaseUrl: 'https://katavti.test', mailFrom: 'test@katavti.test' })
+    await expect(auth.requestMagicLink('alice@example.com')).rejects.toThrow(/Email sign-in is not configured/)
+    vi.unstubAllEnvs()
+  })
+
   it('rejects an expired link', async () => {
     let now = 1000
     const auth = createAuthService({ magicLinkBaseUrl: 'http://katavti.local', mailFrom: 'test@katavti.local', now: () => now })

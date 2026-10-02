@@ -1,6 +1,6 @@
 # Katavti Ansible automation
 
-This directory builds immutable release images and performs a blue-green deployment beside applications already served by Bifrost's shared Caddy instance.
+This directory builds immutable release images and performs a blue-green deployment beside applications already served by Bifrost's shared Caddy instance. See `DEPLOYMENT_CHECKLIST.md` for the completed pre-deployment review and optional SMTP follow-up.
 
 ## Safety model
 
@@ -32,4 +32,4 @@ cd ansible
 
 ## Release and deployment
 
-Create a release tag, then explicitly run `build-images.yml` to publish missing images. Copy the example inventory outside the repository, use Ansible Vault for SMTP credentials, and review it before running `site.yml`. Running deployment is intentionally outside local validation.
+Create a release tag, then explicitly run `build-images.yml` to publish missing images. Copy the example inventory outside the repository and review it before running `site.yml`. On the target Azure VM, Katavti uses its managed identity to fetch runtime secrets directly from Azure Key Vault; secret values do not pass through Ansible. SMTP is disabled by default, so production email sign-in is rejected rather than exposing a development link; enable it only after storing `katavti-smtp-url` in Key Vault. Running deployment is intentionally outside local validation.

@@ -7,10 +7,11 @@
     - name: Require an explicitly configured target
       ansible.builtin.assert:
         that:
-          - katavti_existing_host | default('') | length > 0
+          - katavti_existing_host | default('') is match('^(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])){3}$')
+          - katavti_tls_email | default('') is match('^[^@ ]+@[^@ ]+\\.[^@ ]+$')
         fail_msg: >-
-          Set katavti_existing_host in a private inventory; deployment target
-          discovery is intentionally disabled.
+          Set katavti_existing_host to a numeric IP address and configure a
+          valid TLS email in a private inventory; target discovery is disabled.
 
     - name: Read immutable Katavti image references
       ansible.builtin.include_role:
@@ -27,6 +28,23 @@
         ansible_port: "{{ katavti_ssh_port }}"
         katavti_client_image: "{{ katavti_images_client_reference }}"
         katavti_server_image: "{{ katavti_images_server_reference }}"
+
+    - name: Verify Google Cloud DNS access without changing DNS
+      when: katavti_dns_enabled | bool
+      google.cloud.gcp_dns_managed_zone_info:
+        project: "{{ katavti_dns_project }}"
+        auth_kind: "{{ katavti_dns_auth_kind }}"
+        service_account_file: "{{ katavti_dns_credentials_file | default(omit, true) }}"
+        dns_name:
+          - "{{ katavti_dns_managed_zone_dns_name }}"
+      register: katavti_dns_zone_info
+
+    - name: Require access to the configured Google Cloud DNS zone
+      when: katavti_dns_enabled | bool
+      ansible.builtin.assert:
+        that:
+          - katavti_dns_zone_info.resources | length > 0
+        fail_msg: Cannot access the configured Google Cloud DNS zone.
 
     - name: Configure public DNS
       ansible.builtin.include_role:

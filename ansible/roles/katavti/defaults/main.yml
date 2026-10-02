@@ -6,6 +6,9 @@ katavti_config_dir: "{{ katavti_base_dir }}/config"
 katavti_staging_dir: "{{ katavti_base_dir }}/staging"
 katavti_state_file: "{{ katavti_base_dir }}/active-slot"
 katavti_data_dir: /var/lib/katavti/notes
+katavti_legacy_data_dir: /var/lib/workspace-notes/notes
+katavti_migrate_legacy_data: true
+katavti_legacy_migration_marker: "{{ katavti_base_dir }}/legacy-data-migrated"
 katavti_container_data_dir: /data
 katavti_domain_name: ""
 katavti_tls_email: ""
@@ -17,8 +20,11 @@ katavti_cors_origins:
   - "https://{{ katavti_domain_name }}"
 katavti_identity_header_name: x-user-id
 katavti_magic_link_base_url: "https://{{ katavti_domain_name }}"
-katavti_google_client_id: ""
-katavti_smtp_url: ""
+katavti_key_vault_name: ""
+katavti_key_vault_managed_identity_client_id: ""
+katavti_key_vault_google_client_id_secret: katavti-google-client-id
+katavti_smtp_enabled: false
+katavti_key_vault_smtp_url_secret: katavti-smtp-url
 katavti_mail_from: "Katavti <no-reply@{{ katavti_domain_name }}>"
 katavti_client_image: ""
 katavti_server_image: ""

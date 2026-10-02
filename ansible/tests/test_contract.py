@@ -30,8 +30,6 @@ VARS = {
     "katavti_identity_header_name": "x-user-id",
     "katavti_magic_link_base_url": "https://katavti.example.test",
     "katavti_mail_from": "Katavti <no-reply@example.test>",
-    "katavti_google_client_id": "client-id",
-    "katavti_smtp_url": "smtps://user:secret@example.test",
 }
 
 class DeploymentContractTest(unittest.TestCase):
@@ -56,7 +54,7 @@ class DeploymentContractTest(unittest.TestCase):
             "roles/katavti/templates/docker-compose.yml.j2",
             "roles/katavti/templates/katavti.caddy.j2",
             "roles/katavti/templates/production.yaml.j2",
-            "roles/katavti/templates/secrets.yaml.j2",
+            "roles/katavti/templates/fetch-key-vault-secrets.sh.j2",
         ]
         self.assertEqual([], [path for path in required if not (ROOT / path).is_file()])
 
@@ -81,15 +79,12 @@ class DeploymentContractTest(unittest.TestCase):
 
     def test_production_config_is_complete_and_secrets_are_separate(self):
         config_text = self.render("production.yaml.j2")
-        secret_text = self.render("secrets.yaml.j2")
         config = yaml.safe_load(config_text)
-        secrets = yaml.safe_load(secret_text)
         self.assertEqual("prod", config["environmentType"])
         self.assertEqual("0.0.0.0", config["server"]["host"])
         self.assertEqual("/data", config["storage"]["dataDir"])
         self.assertFalse(config["http"]["cors"]["allowLoopbackInDevelopment"])
-        self.assertNotIn("smtps://user:secret", config_text)
-        self.assertEqual("smtps://user:secret@example.test", secrets["auth"]["smtpUrl"])
+        self.assertNotIn("googleClientId", config_text)
 
     def test_activation_is_guarded_and_rollback_capable(self):
         tasks = (ROOT / "roles/katavti/tasks/activate.yml").read_text()
@@ -106,6 +101,16 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("Remove legacy Workspace Notes route from Caddy", tasks)
         self.assertIn("Restore legacy Workspace Notes route after failed activation", tasks)
 
+    def test_secrets_are_fetched_on_the_target_with_managed_identity(self):
+        tasks = (ROOT / "roles/katavti/tasks/main.yml").read_text()
+        fetcher = (ROOT / "roles/katavti/templates/fetch-key-vault-secrets.sh.j2").read_text()
+        self.assertIn("Fetch production secrets directly from Azure Key Vault", tasks)
+        self.assertIn("169.254.169.254/metadata/identity/oauth2/token", fetcher)
+        self.assertIn("client_id={{ katavti_key_vault_managed_identity_client_id", fetcher)
+        self.assertIn("katavti_key_vault_google_client_id_secret", fetcher)
+        self.assertIn("katavti_key_vault_smtp_url_secret", fetcher)
+        self.assertNotIn("az keyvault", fetcher)
+
     def test_system_ids_are_allocated_by_the_target_host(self):
         defaults = (ROOT / "roles/katavti/defaults/main.yml").read_text()
         main = (ROOT / "roles/katavti/tasks/main.yml").read_text()
@@ -118,6 +123,18 @@ class DeploymentContractTest(unittest.TestCase):
         dockerfile = (ROOT.parent / "client/Dockerfile").read_text()
         self.assertIn("ARG VITE_GOOGLE_CLIENT_ID", dockerfile)
         self.assertIn("ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID", dockerfile)
+
+    def test_image_build_requires_an_exact_clean_release_checkout(self):
+        tasks = (ROOT / "roles/katavti_images/tasks/main.yml").read_text()
+        self.assertIn("describe", tasks)
+        self.assertIn("--exact-match", tasks)
+        self.assertIn("status", tasks)
+        self.assertIn("--porcelain", tasks)
+        self.assertIn("katavti_images_head_tag.stdout == katavti_images_release_tag", tasks)
+        self.assertIn("katavti_images_worktree.stdout | length == 0", tasks)
+        self.assertIn("az", tasks)
+        self.assertIn("katavti_images_google_client_id_secret", tasks)
+        self.assertIn("no_log: true", tasks)
 
     def test_site_does_not_build_images_or_clean_old_slot(self):
         site = (ROOT / "playbooks/site.yml").read_text()
@@ -135,6 +152,7 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn('name: "{{ katavti_domain_name }}."', dns)
         self.assertIn("state: present", dns)
         self.assertIn("google.cloud", requirements)
+        self.assertIn("Verify Google Cloud DNS access without changing DNS", site)
 
 if __name__ == "__main__":
     unittest.main()
