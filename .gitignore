@@ -8,6 +8,8 @@ config*.yaml
 !config-defaults.yaml
 config*.yml
 config/
+!server/src/config/
+!server/src/config/*.ts
 secrets/
 coverage/
 .DS_Store

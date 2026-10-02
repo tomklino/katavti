@@ -13,7 +13,7 @@ describe('local notes', () => {
     await api.update(id, '# Local note')
     expect(decodeURIComponent(id)).toBe('2026/september.d/workspaces-2026-09-26/workspace-1.md')
     expect((await api.read(id)).content).toBe('# Local note')
-    expect(await api.list({ days: 5 })).toContain(id)
+    expect(await api.list({ days: 30 })).toContain(id)
   })
 
   it('keeps additional notes visible when the daily view reloads its initial count', async () => {

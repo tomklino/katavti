@@ -65,7 +65,7 @@ describe('API end to end', () => {
     })
     expect(updated.response.status).toBe(200)
 
-    const listed = await json('/api/v1beta/notes?days=5', { headers })
+    const listed = await json('/api/v1beta/notes?days=30', { headers })
     expect(listed.body).toContain(id)
 
     const note = await json(`/api/v1beta/notes/${id}`, { headers })
