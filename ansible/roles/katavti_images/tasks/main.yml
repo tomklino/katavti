@@ -180,8 +180,8 @@
     - katavti_images_publish_public | bool
   ansible.builtin.uri:
     url: >-
-      https://hub.docker.com/v2/repositories/{{ katavti_images_registry_namespace | regex_replace('^docker.io/', '') }}/{{ item }}/
-    method: PATCH
+      https://hub.docker.com/v2/repositories/{{ katavti_images_registry_namespace | regex_replace('^docker.io/', '') }}/{{ item }}/privacy/
+    method: POST
     headers:
       Authorization: "JWT {{ katavti_images_docker_hub_login.json.token }}"
     body_format: json
