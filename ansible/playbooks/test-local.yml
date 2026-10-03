@@ -17,6 +17,9 @@
     katavti_system_gid: 991
     katavti_data_dir: /var/lib/katavti/notes
     katavti_container_data_dir: /data
+    katavti_azure_storage_enabled: true
+    katavti_azure_storage_name: katavti-notes
+    katavti_azure_storage_account_name: katavtinotesexample
     katavti_config_dir: /opt/katavti/config
     katavti_shared_network_name: bifrost-stack_default
     katavti_environment_type: prod

@@ -19,6 +19,67 @@
       vars:
         katavti_images_build_missing: false
 
+    - name: Validate Azure storage provisioning configuration
+      when: katavti_azure_storage_enabled | bool
+      ansible.builtin.assert:
+        that:
+          - katavti_azure_subscription_id | length > 0
+          - katavti_azure_resource_group | length > 0
+          - katavti_azure_location | length > 0
+          - katavti_azure_vm_name | length > 0
+          - katavti_azure_managed_identity_principal_id | length > 0
+          - katavti_azure_storage_name | length > 0
+          - katavti_azure_storage_account_name is match('^[a-z0-9]{3,24}$')
+        fail_msg: Configure the Azure resource group, location, VM, managed identity principal ID, and storage names.
+
+    - name: Read the Katavti Azure VM identity
+      when: katavti_azure_storage_enabled | bool
+      azure.azcollection.azure_rm_virtualmachine_info:
+        resource_group: "{{ katavti_azure_resource_group }}"
+        name: "{{ katavti_azure_vm_name }}"
+      register: katavti_azure_vm
+
+    - name: Require the configured managed identity to be assigned to the Katavti VM
+      when: katavti_azure_storage_enabled | bool
+      ansible.builtin.assert:
+        that:
+          - katavti_azure_vm.vms | length == 1
+          - >-
+            katavti_azure_managed_identity_principal_id == katavti_azure_vm.vms[0].identity.principal_id
+            or katavti_azure_managed_identity_principal_id in
+            (katavti_azure_vm.vms[0].identity.user_assigned_identities | default({}) |
+            dict2items | map(attribute='value.principal_id') | list)
+        fail_msg: The configured managed identity is not assigned to the Katavti VM.
+
+    - name: Create the Azure notes storage account
+      when: katavti_azure_storage_enabled | bool
+      azure.azcollection.azure_rm_storageaccount:
+        resource_group: "{{ katavti_azure_resource_group }}"
+        name: "{{ katavti_azure_storage_account_name }}"
+        location: "{{ katavti_azure_location }}"
+        account_type: Standard_LRS
+        kind: StorageV2
+        https_only: true
+        minimum_tls_version: TLS1_2
+        state: present
+      register: katavti_azure_storage_account
+
+    - name: Create the Azure notes blob container
+      when: katavti_azure_storage_enabled | bool
+      azure.azcollection.azure_rm_storageblob:
+        resource_group: "{{ katavti_azure_resource_group }}"
+        storage_account_name: "{{ katavti_azure_storage_account_name }}"
+        container: "{{ katavti_azure_storage_name }}"
+        state: present
+
+    - name: Grant the Katavti VM identity the Storage Blob Data Contributor role
+      when: katavti_azure_storage_enabled | bool
+      azure.azcollection.azure_rm_roleassignment:
+        assignee_object_id: "{{ katavti_azure_managed_identity_principal_id }}"
+        role_definition_id: "/subscriptions/{{ katavti_azure_subscription_id }}/providers/Microsoft.Authorization/roleDefinitions/{{ katavti_azure_storage_blob_contributor_role_id }}"
+        scope: "{{ katavti_azure_storage_account.state.id }}"
+        state: present
+
     - name: Add the explicitly selected target
       ansible.builtin.add_host:
         name: katavti_target
@@ -28,6 +89,9 @@
         ansible_port: "{{ katavti_ssh_port }}"
         katavti_client_image: "{{ katavti_images_client_reference }}"
         katavti_server_image: "{{ katavti_images_server_reference }}"
+        katavti_azure_storage_enabled: "{{ katavti_azure_storage_enabled }}"
+        katavti_azure_storage_name: "{{ katavti_azure_storage_name }}"
+        katavti_azure_storage_account_name: "{{ katavti_azure_storage_account_name }}"
 
     - name: Verify Google Cloud DNS access without changing DNS
       when: katavti_dns_enabled | bool

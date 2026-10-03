@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
-import type { NotesService } from '../../services/notes-service.js'
+import type { NotesData } from '../../data-modules/notes-data.js'
 
 type Variables = { userId: string }
 
-export function noteRoutes(service: NotesService) {
+export function noteRoutes(service: NotesData) {
   const routes = new Hono<{ Variables: Variables }>()
   routes.get('/', async c => {
     const rawDays = c.req.query('days')

@@ -1,18 +1,14 @@
 import path from 'node:path'
-import { lstat, mkdir, open, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, readdir, writeFile } from 'node:fs/promises'
+import { NotesError, type Note, type NotesData } from './notes-data.js'
 
-export type FileSystem = {
+type FileSystem = {
   mkdir(path: string, options: { recursive: true }): Promise<unknown>
   readFile(path: string, encoding: 'utf8'): Promise<string>
   writeFile(path: string, content: string, encoding?: 'utf8'): Promise<unknown>
   readdir(path: string, options?: { recursive?: boolean }): Promise<string[]>
-  stat(path: string): Promise<{ size: number }>
   lstat(path: string): Promise<{ isSymbolicLink(): boolean }>
   touch(path: string): Promise<unknown>
-}
-
-export class NotesError extends Error {
-  constructor(message: string, public status: number) { super(message) }
 }
 
 const nodeFs: FileSystem = {
@@ -20,16 +16,12 @@ const nodeFs: FileSystem = {
   readFile: (file, encoding) => readFile(file, encoding),
   writeFile,
   readdir: (dir, options) => readdir(dir, options) as Promise<string[]>,
-  stat,
   lstat,
   async touch(file) { const handle = await open(file, 'a'); await handle.close() },
 }
 
-export type Note = { content: string; ISODateString: string; tags: Array<[string, string]> }
-export type NotesService = ReturnType<typeof createNotesService>
-
-export function createNotesService(options: { dataDir: string; fs?: FileSystem; now?: () => Date }) {
-  const fs = options.fs ?? nodeFs
+export function createFileNotesData(options: { dataDir: string; now?: () => Date }): NotesData {
+  const fs = nodeFs
   const now = options.now ?? (() => new Date())
 
   function userDirectory(userId: string) {
@@ -127,8 +119,7 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
       await fs.mkdir(path.dirname(resolved), { recursive: true })
       await rejectSymlinkPath(root, resolved)
       await fs.writeFile(resolved, content, 'utf8')
-    }
-    catch (error: any) {
+    } catch (error: any) {
       if (error?.code === 'ENOENT') throw new NotesError('Note not found', 404)
       throw error
     }
@@ -140,10 +131,10 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
     let names: string[]
     try { names = await fs.readdir(root, { recursive: true }) }
     catch (error: any) { if (error?.code === 'ENOENT') return []; throw error }
-    const candidates = names.filter((name) => /\.(md|txt)$/.test(name))
+    const candidates = names.filter(name => /\.(md|txt)$/.test(name))
     const cutoff = new Date(now()); cutoff.setUTCDate(cutoff.getUTCDate() - (query.days ?? 5))
     const matched: string[] = []
-    await Promise.all(candidates.map(async (id) => {
+    await Promise.all(candidates.map(async id => {
       let content: string
       const resolved = path.resolve(root, id)
       if (resolved === root || !resolved.startsWith(`${root}${path.sep}`)) return
@@ -153,9 +144,7 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
       } catch { return }
       if (query.bug) {
         if (!content.split('\n').some(line => ['Bug', 'Label'].some(prefix => line.trim() === `${prefix}: ${query.bug}`))) return
-      } else {
-        if (!content.length || dateFromId(id) < cutoff) return
-      }
+      } else if (!content.length || dateFromId(id) < cutoff) return
       matched.push(id)
     }))
     return matched.sort((a, b) => dateFromId(b).getTime() - dateFromId(a).getTime()).map(encodeURIComponent)

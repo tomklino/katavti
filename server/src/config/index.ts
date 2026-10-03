@@ -1,14 +1,18 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { parse } from 'yaml'
-import { ConfigError, validateConfig, type ConfigValidator } from './validation.js'
+import { ConfigError, runConfigValidators, type ConfigValidator } from './validation.js'
 
 export { ConfigError } from './validation.js'
+
+export type StorageConfig =
+  | { module?: 'filesystem'; dataDir: string }
+  | { module: 'azure'; azure: { connectionString?: string; accountName?: string; containerName: string; clientId?: string } }
 
 export interface AppConfig {
   environmentType: 'dev' | 'prod'
   server: { host: string; port: number }
-  storage: { dataDir: string }
+  storage: StorageConfig
   http: {
     cors: { origins: string[]; allowLoopbackInDevelopment: boolean }
     identity: { headerName: string }
@@ -37,7 +41,12 @@ const environmentKeys: Record<string, string> = {
   KATAVTI_ENVIRONMENT_TYPE: 'environmentType',
   KATAVTI_SERVER_HOST: 'server.host',
   KATAVTI_SERVER_PORT: 'server.port',
+  KATAVTI_STORAGE_MODULE: 'storage.module',
   KATAVTI_STORAGE_DATA_DIR: 'storage.dataDir',
+  KATAVTI_STORAGE_AZURE_CONNECTION_STRING: 'storage.azure.connectionString',
+  KATAVTI_STORAGE_AZURE_ACCOUNT_NAME: 'storage.azure.accountName',
+  KATAVTI_STORAGE_AZURE_CONTAINER_NAME: 'storage.azure.containerName',
+  KATAVTI_STORAGE_AZURE_CLIENT_ID: 'storage.azure.clientId',
   KATAVTI_HTTP_CORS_ORIGINS: 'http.cors.origins',
   KATAVTI_HTTP_CORS_ALLOW_LOOPBACK_IN_DEVELOPMENT: 'http.cors.allowLoopbackInDevelopment',
   KATAVTI_HTTP_IDENTITY_HEADER_NAME: 'http.identity.headerName',
@@ -134,7 +143,7 @@ const validators: ConfigValidator[] = [
   { key: 'environmentType', validate: (key, value) => value === 'dev' || value === 'prod' ? { level: 'valid' } : { level: 'fatal', message: 'must be dev or prod' } },
   { key: 'server.host', validate: required },
   { key: 'server.port', validate: (key, value) => Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 65535 ? { level: 'valid' } : { level: 'error', message: 'must be an integer from 1 to 65535' } },
-  { key: 'storage.dataDir', validate: required },
+  { key: 'storage.module', validate: (key, value) => value === undefined || value === 'filesystem' || value === 'azure' ? { level: 'valid' } : { level: 'fatal', message: 'must be filesystem or azure' } },
   { key: 'http.cors.origins', validate: (key, value) => {
     if (!Array.isArray(value)) return { level: 'error', message: 'must be a list of URLs' }
     const invalid = value.findIndex(origin => origin !== '*' && (() => { try { new URL(String(origin)); return false } catch { return true } })())
@@ -169,16 +178,32 @@ export async function loadConfig(options: LoadConfigOptions): Promise<AppConfig>
   merge(config, envConfig)
   merge(config, cliConfig)
 
+  const validationResults = runConfigValidators(config, validators)
+  issues.push(...validationResults
+    .filter(result => result.level === 'error' || result.level === 'fatal')
+    .map(result => `${result.key}: ${result.message ?? 'invalid value'}`))
+
+  const storageModule = getValue(config, 'storage.module') ?? (getValue(config, 'storage.dataDir') !== undefined ? 'filesystem' : undefined)
+  const storageKeys = storageModule === 'azure'
+    ? ['storage.azure.containerName']
+    : ['storage.dataDir']
+  if (storageModule === 'azure' && !getValue(config, 'storage.azure.connectionString') && !getValue(config, 'storage.azure.accountName')) {
+    issues.push('storage.azure.accountName: accountName or connectionString is required for azure storage')
+  }
+  for (const key of storageKeys) {
+    if (required(key, getValue(config, key)).level !== 'valid') issues.push(`${key}: is required for ${storageModule ?? 'selected'} storage`)
+  }
   if (environmentType === 'prod') {
-    for (const key of ['server.host', 'server.port', 'storage.dataDir', 'http.cors.origins', 'http.cors.allowLoopbackInDevelopment', 'http.identity.headerName', 'api.basePath']) {
+    for (const key of ['server.host', 'server.port', 'http.cors.origins', 'http.cors.allowLoopbackInDevelopment', 'http.identity.headerName', 'api.basePath']) {
       if (getValue(config, key) === undefined) issues.push(`${key}: is required in prod; config-defaults values are not used`)
     }
   }
-  if (issues.length) throw new ConfigError(issues)
-  validateConfig(config, validators)
+  if (issues.length) throw new ConfigError(issues, validationResults)
 
-  const dataDir = getValue(config, 'storage.dataDir') as string
-  setValue(config, 'storage.dataDir', path.resolve(cwd, dataDir))
+  if (storageModule === 'filesystem') {
+    const dataDir = getValue(config, 'storage.dataDir') as string
+    setValue(config, 'storage.dataDir', path.resolve(cwd, dataDir))
+  }
   if (getValue(config, 'auth.googleClientId') === undefined) setValue(config, 'auth.googleClientId', '')
   if (getValue(config, 'auth.smtpUrl') === undefined) setValue(config, 'auth.smtpUrl', '')
   if (getValue(config, 'config.files') === undefined) setValue(config, 'config.files', [])

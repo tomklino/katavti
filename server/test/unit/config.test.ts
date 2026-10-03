@@ -16,6 +16,19 @@ async function tempFiles(files: Record<string, string>) {
 afterEach(async () => Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true }))))
 
 describe('configuration loading', () => {
+  it('loads Azure storage configuration without requiring a filesystem data directory', async () => {
+    const directory = await tempFiles({
+      'defaults.yaml': `environmentType: dev\nserver:\n  host: localhost\n  port: 3030\nstorage:\n  module: azure\n  azure:\n    connectionString: UseDevelopmentStorage=true\n    containerName: notes\nhttp:\n  cors:\n    origins: [http://localhost:8080]\n    allowLoopbackInDevelopment: true\n  identity:\n    headerName: x-user-id\napi:\n  basePath: /api\nconfig:\n  files: []\n  secretFiles: []\n`,
+    })
+
+    const config = await loadConfig({ defaultsFile: path.join(directory, 'defaults.yaml'), env: {}, argv: [], cwd: directory })
+
+    expect(config.storage).toEqual({
+      module: 'azure',
+      azure: { connectionString: 'UseDevelopmentStorage=true', containerName: 'notes' },
+    })
+  })
+
   it('overwrites defaults with config files, secret files, environment, then CLI arguments', async () => {
     const directory = await tempFiles({
       'defaults.yaml': `environmentType: dev\nserver:\n  host: default-host\n  port: 1000\nstorage:\n  dataDir: ./default-data\nhttp:\n  cors:\n    origins: [http://default.test]\n    allowLoopbackInDevelopment: true\n  identity:\n    headerName: x-default-user\napi:\n  basePath: /default-api\nconfig:\n  files: []\n  secretFiles: []\n`,

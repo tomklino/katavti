@@ -23,6 +23,10 @@ VARS = {
     "katavti_system_gid": 991,
     "katavti_data_dir": "/var/lib/katavti/notes",
     "katavti_container_data_dir": "/data",
+    "katavti_azure_storage_enabled": True,
+    "katavti_azure_storage_name": "katavti-notes",
+    "katavti_azure_storage_account_name": "katavtinotesexample",
+    "katavti_key_vault_managed_identity_client_id": "00000000-0000-0000-0000-000000000000",
     "katavti_config_dir": "/opt/katavti/config",
     "katavti_shared_network_name": "bifrost-stack_default",
     "katavti_environment_type": "prod",
@@ -37,6 +41,7 @@ class DeploymentContractTest(unittest.TestCase):
     def setUpClass(cls):
         cls.jinja = Environment(loader=FileSystemLoader(TEMPLATES), undefined=StrictUndefined)
         cls.jinja.filters["to_json"] = json.dumps
+        cls.jinja.filters["bool"] = bool
 
     def render(self, name, **overrides):
         return self.jinja.get_template(name).render(**(VARS | overrides))
@@ -75,14 +80,19 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual("katavti-blue-client", compose["services"]["client"]["container_name"])
         self.assertEqual("katavti-blue-server", compose["services"]["server"]["container_name"])
         self.assertEqual("bifrost-stack_default", compose["networks"]["proxy"]["name"])
-        self.assertIn("/var/lib/katavti/notes:/data", compose["services"]["server"]["volumes"])
+        self.assertNotIn("/var/lib/katavti/notes:/data", compose["services"]["server"]["volumes"])
+        filesystem = yaml.safe_load(self.render("docker-compose.yml.j2", katavti_azure_storage_enabled=False))
+        self.assertIn("/var/lib/katavti/notes:/data", filesystem["services"]["server"]["volumes"])
 
     def test_production_config_is_complete_and_secrets_are_separate(self):
         config_text = self.render("production.yaml.j2")
         config = yaml.safe_load(config_text)
         self.assertEqual("prod", config["environmentType"])
         self.assertEqual("0.0.0.0", config["server"]["host"])
-        self.assertEqual("/data", config["storage"]["dataDir"])
+        self.assertEqual("azure", config["storage"]["module"])
+        self.assertEqual("katavtinotesexample", config["storage"]["azure"]["accountName"])
+        self.assertEqual("katavti-notes", config["storage"]["azure"]["containerName"])
+        self.assertEqual("00000000-0000-0000-0000-000000000000", config["storage"]["azure"]["clientId"])
         self.assertFalse(config["http"]["cors"]["allowLoopbackInDevelopment"])
         self.assertNotIn("googleClientId", config_text)
 
@@ -142,6 +152,19 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("hub.docker.com/v2/repositories", tasks)
         self.assertIn("/{{ item }}/privacy/", tasks)
         self.assertIn("no_log: true", tasks)
+
+    def test_site_provisions_azure_storage_and_assigns_blob_access(self):
+        site = (ROOT / "playbooks/site.yml").read_text()
+        requirements = (ROOT / "requirements.yml").read_text()
+        inventory = yaml.safe_load((ROOT / "inventories/example/group_vars/all.yml").read_text())
+        self.assertTrue(inventory["katavti_azure_storage_enabled"])
+        self.assertEqual("katavti-notes", inventory["katavti_azure_storage_name"])
+        self.assertIn("azure.azcollection.azure_rm_virtualmachine_info", site)
+        self.assertIn("azure.azcollection.azure_rm_storageaccount", site)
+        self.assertIn("azure.azcollection.azure_rm_storageblob", site)
+        self.assertIn("Storage Blob Data Contributor", site)
+        self.assertIn("katavti_azure_managed_identity_principal_id", site)
+        self.assertIn("azure.azcollection", requirements)
 
     def test_site_does_not_build_images_or_clean_old_slot(self):
         site = (ROOT / "playbooks/site.yml").read_text()

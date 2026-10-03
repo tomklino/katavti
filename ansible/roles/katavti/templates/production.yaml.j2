@@ -4,7 +4,16 @@ server:
   host: 0.0.0.0
   port: {{ katavti_server_port }}
 storage:
+{% if katavti_azure_storage_enabled | bool %}
+  module: azure
+  azure:
+    accountName: {{ katavti_azure_storage_account_name | to_json }}
+    containerName: {{ katavti_azure_storage_name | to_json }}
+    clientId: {{ katavti_key_vault_managed_identity_client_id | to_json }}
+{% else %}
+  module: filesystem
   dataDir: {{ katavti_container_data_dir }}
+{% endif %}
 http:
   cors:
     origins: {{ katavti_cors_origins | to_json }}

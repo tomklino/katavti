@@ -33,7 +33,12 @@ Configure additional files with `KATAVTI_CONFIG_FILES=config-local.yaml` and `KA
 | `environmentType` | `KATAVTI_ENVIRONMENT_TYPE` | `--environmentType=prod` |
 | `server.host` | `KATAVTI_SERVER_HOST` | `--server.host=0.0.0.0` |
 | `server.port` | `KATAVTI_SERVER_PORT` | `--server.port=3030` |
+| `storage.module` | `KATAVTI_STORAGE_MODULE` | `--storage.module=filesystem` |
 | `storage.dataDir` | `KATAVTI_STORAGE_DATA_DIR` | `--storage.dataDir=/srv/notes` |
+| `storage.azure.connectionString` | `KATAVTI_STORAGE_AZURE_CONNECTION_STRING` | `--storage.azure.connectionString=...` |
+| `storage.azure.accountName` | `KATAVTI_STORAGE_AZURE_ACCOUNT_NAME` | `--storage.azure.accountName=katavtinotes` |
+| `storage.azure.containerName` | `KATAVTI_STORAGE_AZURE_CONTAINER_NAME` | `--storage.azure.containerName=notes` |
+| `storage.azure.clientId` | `KATAVTI_STORAGE_AZURE_CLIENT_ID` | `--storage.azure.clientId=...` |
 | `http.cors.origins` | `KATAVTI_HTTP_CORS_ORIGINS` | `--http.cors.origins=http://localhost:8080` |
 | `http.cors.allowLoopbackInDevelopment` | `KATAVTI_HTTP_CORS_ALLOW_LOOPBACK_IN_DEVELOPMENT` | `--http.cors.allowLoopbackInDevelopment=true` |
 | `http.identity.headerName` | `KATAVTI_HTTP_IDENTITY_HEADER_NAME` | `--http.identity.headerName=x-user-id` |
@@ -42,6 +47,8 @@ Configure additional files with `KATAVTI_CONFIG_FILES=config-local.yaml` and `KA
 | `config.secretFiles` | `KATAVTI_CONFIG_SECRET_FILES` | `--config.secretFiles=secrets/local.yaml` |
 
 List values supplied through environment or CLI are comma-separated. Invalid configuration is reported as a complete list of validation errors and startup fails.
+
+Set `storage.module` to `filesystem` and provide `storage.dataDir`, or set it to `azure` and provide `storage.azure.containerName` plus either `storage.azure.connectionString` or `storage.azure.accountName`. With an account name, Azure identity credentials are used; `storage.azure.clientId` selects a user-assigned managed identity.
 
 ## Develop
 

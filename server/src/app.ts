@@ -6,11 +6,15 @@ import { dailyRoutes } from './routes/daily/index.js'
 import { healthRoutes } from './routes/health/index.js'
 import { noteRoutes } from './routes/notes/index.js'
 import { createAuthService, type AuthService } from './services/auth-service.js'
-import { createNotesService, NotesError, type NotesService } from './services/notes-service.js'
+import { createAzureNotesData } from './data-modules/azure-notes-data.js'
+import { createFileNotesData } from './data-modules/file-notes-data.js'
+import { NotesError, type NotesData } from './data-modules/notes-data.js'
 
-export function createApp(config: AppConfig, injectedService?: NotesService, injectedAuth?: AuthService) {
+export function createApp(config: AppConfig, injectedNotesData?: NotesData, injectedAuth?: AuthService) {
   const app = new Hono<{ Variables: { userId: string } }>()
-  const service = injectedService ?? createNotesService({ dataDir: config.storage.dataDir })
+  const notesData = injectedNotesData ?? (config.storage.module === 'azure'
+    ? createAzureNotesData(config.storage.azure)
+    : createFileNotesData({ dataDir: config.storage.dataDir }))
   const auth = injectedAuth ?? createAuthService(config.auth)
   const apiPath = config.api.basePath
   app.use(`${apiPath}/*`, cors({
@@ -33,8 +37,8 @@ export function createApp(config: AppConfig, injectedService?: NotesService, inj
     c.set('userId', user.email)
     await next()
   })
-  app.route(`${apiPath}/notes/daily`, dailyRoutes(service))
-  app.route(`${apiPath}/notes`, noteRoutes(service))
+  app.route(`${apiPath}/notes/daily`, dailyRoutes(notesData))
+  app.route(`${apiPath}/notes`, noteRoutes(notesData))
   app.notFound(c => c.json({ error: 'Not found' }, 404))
   app.onError((error, c) => {
     if (error instanceof NotesError) return c.json({ error: error.message }, error.status as 400)
