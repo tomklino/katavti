@@ -14,6 +14,10 @@ function mockFs(files: Record<string, string> = {}): FileSystem {
     writeFile: vi.fn(async (path, content) => { files[path] = content }),
     readdir: vi.fn().mockResolvedValue([]),
     stat: vi.fn(async (path) => ({ size: files[path]?.length ?? 0 })),
+    lstat: vi.fn(async (path) => {
+      if (files[path] === undefined) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      return { isSymbolicLink: () => false }
+    }),
     touch: vi.fn(async (path) => { files[path] ??= '' }),
   }
 }
@@ -46,6 +50,18 @@ describe('notes service', () => {
   it('rejects note IDs that escape the user directory', async () => {
     const service = createNotesService({ dataDir: '/notes', fs: mockFs(), now: () => now })
     await expect(service.read('alice', '../../secret.md')).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('rejects symlinks within a note path', async () => {
+    const fs = mockFs({ '/notes/alice': '' })
+    ;(fs.lstat as any).mockImplementation(async (candidate: string) => ({
+      isSymbolicLink: () => candidate === '/notes/alice/2026',
+    }))
+    const service = createNotesService({ dataDir: '/notes', fs, now: () => now })
+    const id = '2026/september.d/workspaces-2026-09-25/workspace-1.md'
+
+    await expect(service.read('alice', id)).rejects.toMatchObject({ status: 400 })
+    await expect(service.update('alice', id, 'changed')).rejects.toMatchObject({ status: 400 })
   })
 
   it('updates note content through the filesystem boundary', async () => {

@@ -79,15 +79,29 @@ describe('API end to end', () => {
     expect(filtered.body).toEqual([id])
   })
 
-  it('requires identity and isolates users', async () => {
+  it('requires identity and isolates direct note references between users', async () => {
+    const created = await json('/api/v1beta/notes/daily?num=1&date=2026-09-25', { method: 'PUT', headers })
+    const id = created.body[0]
+    await json(`/api/v1beta/notes/${id}`, {
+      method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ content: 'Alice secret' }),
+    })
+
     expect((await json('/api/v1beta/notes')).response.status).toBe(401)
-    await json('/api/v1beta/notes/daily?num=1&date=2026-09-25', { method: 'PUT', headers })
-    const bob = await json('/api/v1beta/notes?days=5', { headers: await login('bob@example.com') })
-    expect(bob.body).toEqual([])
+    expect((await json(`/api/v1beta/notes/${id}`)).response.status).toBe(401)
+
+    const bobHeaders = await login('bob@example.com')
+    expect((await json('/api/v1beta/notes?days=5', { headers: bobHeaders })).body).toEqual([])
+    expect((await json(`/api/v1beta/notes/${id}`, { headers: bobHeaders })).response.status).toBe(404)
+    await json(`/api/v1beta/notes/${id}`, {
+      method: 'POST', headers: { ...bobHeaders, 'content-type': 'application/json' }, body: JSON.stringify({ content: 'Bob content' }),
+    })
+    expect((await json(`/api/v1beta/notes/${id}`, { headers })).body.content).toBe('Alice secret')
   })
 
   it('validates daily input and blocks traversal', async () => {
     expect((await json('/api/v1beta/notes/daily?num=0', { method: 'PUT', headers })).response.status).toBe(400)
     expect((await json('/api/v1beta/notes/%2E%2E%2Fsecret.md', { headers })).response.status).toBe(400)
+    expect((await json('/api/v1beta/notes/%252E%252E%252Fsecret.md', { headers })).response.status).toBe(400)
+    expect((await json('/api/v1beta/notes/2026%2Fseptember.d%2Fworkspaces-2026-09-25%2F..%2F..%2Fbob@example.com%2Fsecret.md', { headers })).response.status).toBe(400)
   })
 })

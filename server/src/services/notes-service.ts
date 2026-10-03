@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { mkdir, open, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 
 export type FileSystem = {
   mkdir(path: string, options: { recursive: true }): Promise<unknown>
@@ -7,6 +7,7 @@ export type FileSystem = {
   writeFile(path: string, content: string, encoding?: 'utf8'): Promise<unknown>
   readdir(path: string, options?: { recursive?: boolean }): Promise<string[]>
   stat(path: string): Promise<{ size: number }>
+  lstat(path: string): Promise<{ isSymbolicLink(): boolean }>
   touch(path: string): Promise<unknown>
 }
 
@@ -20,6 +21,7 @@ const nodeFs: FileSystem = {
   writeFile,
   readdir: (dir, options) => readdir(dir, options) as Promise<string[]>,
   stat,
+  lstat,
   async touch(file) { const handle = await open(file, 'a'); await handle.close() },
 }
 
@@ -38,10 +40,31 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
   function notePath(userId: string, id: string) {
     let decoded: string
     try { decoded = decodeURIComponent(id) } catch { throw new NotesError('Invalid note ID', 400) }
+    if (!/^\d{4}\/[a-z]+\.d\/workspaces-\d{4}-\d{2}-\d{2}\/workspace-\d+\.md$/.test(decoded)) {
+      throw new NotesError('Invalid note ID', 400)
+    }
     const root = userDirectory(userId)
     const resolved = path.resolve(root, decoded)
     if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new NotesError('Invalid note ID', 400)
     return { decoded, resolved }
+  }
+
+  async function rejectSymlinkPath(root: string, resolved: string) {
+    const relative = path.relative(root, resolved)
+    const paths = [root]
+    let current = root
+    for (const component of relative.split(path.sep).filter(Boolean)) {
+      current = path.join(current, component)
+      paths.push(current)
+    }
+    for (const candidate of paths) {
+      try {
+        if ((await fs.lstat(candidate)).isSymbolicLink()) throw new NotesError('Invalid note path', 400)
+      } catch (error: any) {
+        if (error instanceof NotesError) throw error
+        if (error?.code !== 'ENOENT') throw error
+      }
+    }
   }
 
   function dateFromId(id: string) {
@@ -61,8 +84,11 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
     const date = dateString ? new Date(`${dateString}T00:00:00.000Z`) : now()
     if (Number.isNaN(date.getTime()) || (dateString && (!/^\d{4}-\d{2}-\d{2}$/.test(dateString) || date.toISOString().slice(0, 10) !== dateString))) throw new NotesError('Invalid date', 400)
     const relativeDirectory = directoryFor(date)
-    const directory = path.join(userDirectory(userId), relativeDirectory)
+    const root = userDirectory(userId)
+    const directory = path.join(root, relativeDirectory)
+    await rejectSymlinkPath(root, directory)
     await fs.mkdir(directory, { recursive: true })
+    await rejectSymlinkPath(root, directory)
     let existingNames: string[] = []
     try { existingNames = await fs.readdir(directory) } catch { /* A newly created directory is empty. */ }
     const highestExisting = existingNames.reduce((highest, name) => {
@@ -73,7 +99,9 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
     const ids: string[] = []
     for (let number = 1; number <= total; number++) {
       const relative = path.join(relativeDirectory, `workspace-${number}.md`)
-      await fs.touch(path.join(userDirectory(userId), relative))
+      const file = path.join(root, relative)
+      await rejectSymlinkPath(root, file)
+      await fs.touch(file)
       ids.push(encodeURIComponent(relative))
     }
     return ids
@@ -81,6 +109,7 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
 
   async function read(userId: string, id: string): Promise<Note> {
     const { decoded, resolved } = notePath(userId, id)
+    await rejectSymlinkPath(userDirectory(userId), resolved)
     try {
       return { content: await fs.readFile(resolved, 'utf8'), ISODateString: dateFromId(decoded).toISOString(), tags: [] }
     } catch (error: any) {
@@ -92,7 +121,13 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
   async function update(userId: string, id: string, content: string) {
     if (typeof content !== 'string') throw new NotesError('content must be a string', 400)
     const { decoded, resolved } = notePath(userId, id)
-    try { await fs.mkdir(path.dirname(resolved), { recursive: true }); await fs.writeFile(resolved, content, 'utf8') }
+    const root = userDirectory(userId)
+    await rejectSymlinkPath(root, resolved)
+    try {
+      await fs.mkdir(path.dirname(resolved), { recursive: true })
+      await rejectSymlinkPath(root, resolved)
+      await fs.writeFile(resolved, content, 'utf8')
+    }
     catch (error: any) {
       if (error?.code === 'ENOENT') throw new NotesError('Note not found', 404)
       throw error
@@ -110,7 +145,12 @@ export function createNotesService(options: { dataDir: string; fs?: FileSystem; 
     const matched: string[] = []
     await Promise.all(candidates.map(async (id) => {
       let content: string
-      try { content = await fs.readFile(path.join(root, id), 'utf8') } catch { return }
+      const resolved = path.resolve(root, id)
+      if (resolved === root || !resolved.startsWith(`${root}${path.sep}`)) return
+      try {
+        await rejectSymlinkPath(root, resolved)
+        content = await fs.readFile(resolved, 'utf8')
+      } catch { return }
       if (query.bug) {
         if (!content.split('\n').some(line => ['Bug', 'Label'].some(prefix => line.trim() === `${prefix}: ${query.bug}`))) return
       } else {
