@@ -163,7 +163,22 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertIn("azure.azcollection.azure_rm_storageaccount", site)
         self.assertIn("azure.azcollection.azure_rm_storageblob", site)
         self.assertIn("Storage Blob Data Contributor", site)
-        self.assertIn("katavti_azure_managed_identity_principal_id", site)
+        self.assertIn("azure.azcollection.azure_rm_roledefinition_info", site)
+        self.assertIn("katavti_azure_blob_contributor_role.roledefinitions[0].id", site)
+        self.assertNotIn("ba92f5b4-2d11-453d-a403-e96b0029c9fe", site)
+        self.assertNotIn("2a2b9908-6ea1-4ae2-8e65-a410df84e7d1", site)
+        self.assertIn("katavti_azure_managed_identity.principal_id", site)
+        self.assertIn("katavti_azure_managed_identity.client_id", site)
+        self.assertIn("user_assigned_identities | default({}) | dict2items | length == 1", site)
+        self.assertNotIn("katavti_key_vault_managed_identity_client_id", inventory)
+        self.assertIn("argv: [az, account, show", site)
+        self.assertIn("- list-ip-addresses", site)
+        for unnecessary in [
+            "katavti_azure_subscription_id", "katavti_azure_resource_group",
+            "katavti_azure_location", "katavti_azure_vm_name",
+            "katavti_azure_managed_identity_principal_id", "katavti_azure_storage_account_name",
+        ]:
+            self.assertNotIn(unnecessary, inventory)
         self.assertIn("azure.azcollection", requirements)
 
     def test_site_does_not_build_images_or_clean_old_slot(self):

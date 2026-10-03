@@ -3,17 +3,8 @@
 katavti_existing_host: ""
 katavti_existing_user: azureuser
 katavti_ssh_port: 22
-katavti_azure_subscription_id: ""
-katavti_azure_resource_group: ""
-katavti_azure_location: ""
-katavti_azure_vm_name: ""
-katavti_azure_managed_identity_principal_id: ""
 katavti_azure_storage_enabled: true
 katavti_azure_storage_name: katavti-notes
-# Globally unique, 3-24 lowercase letters/numbers; defaults from storage name.
-katavti_azure_storage_account_name: "{{ katavti_azure_storage_name | lower | regex_replace('[^a-z0-9]', '') }}"
-# Built-in Azure role: Storage Blob Data Contributor.
-katavti_azure_storage_blob_contributor_role_id: 2a2b9908-6ea1-4ae2-8e65-a410df84e7d1
 katavti_domain_name: katavti.klino.me
 katavti_tls_email: admin@example.com
 katavti_dns_enabled: true
@@ -28,7 +19,6 @@ katavti_images_key_vault_name: lutravault-pi-ai
 katavti_images_google_client_id_secret: katavti-google-client-id
 katavti_images_publish_public: true
 katavti_key_vault_name: lutravault-pi-ai
-katavti_key_vault_managed_identity_client_id: f06e546a-25b7-4367-807a-5a8663f84f6b
 katavti_key_vault_google_client_id_secret: katavti-google-client-id
 katavti_smtp_mode: disabled
 katavti_key_vault_smtp_url_secret: katavti-smtp-url

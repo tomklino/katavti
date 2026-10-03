@@ -12,8 +12,6 @@ katavti_legacy_migration_marker: "{{ katavti_base_dir }}/legacy-data-migrated"
 katavti_container_data_dir: /data
 katavti_azure_storage_enabled: true
 katavti_azure_storage_name: katavti-notes
-katavti_azure_storage_account_name: "{{ katavti_azure_storage_name | lower | regex_replace('[^a-z0-9]', '') }}"
-katavti_azure_storage_blob_contributor_role_id: 2a2b9908-6ea1-4ae2-8e65-a410df84e7d1
 katavti_domain_name: ""
 katavti_tls_email: ""
 katavti_api_base_path: /api/v1beta
@@ -25,7 +23,6 @@ katavti_cors_origins:
 katavti_identity_header_name: x-user-id
 katavti_magic_link_base_url: "https://{{ katavti_domain_name }}"
 katavti_key_vault_name: ""
-katavti_key_vault_managed_identity_client_id: ""
 katavti_key_vault_google_client_id_secret: katavti-google-client-id
 katavti_smtp_mode: disabled
 katavti_key_vault_smtp_url_secret: katavti-smtp-url
