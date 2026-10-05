@@ -24,6 +24,7 @@ services:
 {% if not (katavti_azure_storage_enabled | bool) %}
       - "{{ katavti_data_dir }}:{{ katavti_container_data_dir }}"
 {% endif %}
+      - "{{ katavti_data_dir | dirname }}/sessions:/sessions"
       - "{{ katavti_config_dir }}:/config:ro"
     networks: [proxy]
     healthcheck:

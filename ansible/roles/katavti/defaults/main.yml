@@ -18,6 +18,9 @@ katavti_api_base_path: /api/v1beta
 katavti_server_port: 3030
 katavti_client_port: 8080
 katavti_environment_type: prod
+katavti_sessions_module: filesystem
+katavti_sessions_lazy: true
+katavti_sessions_cache: true
 katavti_cors_origins:
   - "https://{{ katavti_domain_name }}"
 katavti_identity_header_name: x-user-id

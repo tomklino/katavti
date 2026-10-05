@@ -14,6 +14,12 @@ storage:
   module: filesystem
   dataDir: {{ katavti_container_data_dir }}
 {% endif %}
+sessions:
+  module: {{ katavti_sessions_module }}
+  lazy: {{ katavti_sessions_lazy | bool | lower }}
+  cache: {{ katavti_sessions_cache | bool | lower }}
+  filesystem:
+    directory: /sessions
 http:
   cors:
     origins: {{ katavti_cors_origins | to_json }}

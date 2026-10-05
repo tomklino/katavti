@@ -24,6 +24,9 @@
       - katavti_smtp_mode != 'gmail_oauth2' or katavti_key_vault_smtp_oauth_client_secret_secret | length > 0
       - katavti_smtp_mode != 'gmail_oauth2' or katavti_key_vault_smtp_oauth_refresh_token_secret | length > 0
       - katavti_data_dir.startswith('/')
+      - katavti_sessions_module == 'filesystem'
+      - katavti_sessions_lazy is boolean
+      - katavti_sessions_cache is boolean
       - not (katavti_azure_storage_enabled | bool) or katavti_azure_storage_name | length > 0
       - not (katavti_azure_storage_enabled | bool) or katavti_azure_storage_account_name is match('^[a-z0-9]{3,24}$')
       - katavti_shared_caddy_routes_dir.startswith('/')
@@ -101,6 +104,10 @@
     - {path: "{{ katavti_config_dir }}", owner: root, group: "{{ katavti_system_user }}", mode: "0750"}
     - {path: "{{ katavti_staging_dir }}", owner: root, group: root, mode: "0750"}
     - path: "{{ katavti_data_dir }}"
+      owner: "{{ katavti_system_user }}"
+      group: "{{ katavti_system_user }}"
+      mode: "0750"
+    - path: "{{ katavti_data_dir | dirname }}/sessions"
       owner: "{{ katavti_system_user }}"
       group: "{{ katavti_system_user }}"
       mode: "0750"

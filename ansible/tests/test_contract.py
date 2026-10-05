@@ -30,6 +30,9 @@ VARS = {
     "katavti_config_dir": "/opt/katavti/config",
     "katavti_shared_network_name": "bifrost-stack_default",
     "katavti_environment_type": "prod",
+    "katavti_sessions_module": "filesystem",
+    "katavti_sessions_lazy": True,
+    "katavti_sessions_cache": True,
     "katavti_cors_origins": ["https://katavti.example.test"],
     "katavti_identity_header_name": "x-user-id",
     "katavti_magic_link_base_url": "https://katavti.example.test",
@@ -42,6 +45,7 @@ class DeploymentContractTest(unittest.TestCase):
         cls.jinja = Environment(loader=FileSystemLoader(TEMPLATES), undefined=StrictUndefined)
         cls.jinja.filters["to_json"] = json.dumps
         cls.jinja.filters["bool"] = bool
+        cls.jinja.filters["dirname"] = lambda value: str(Path(value).parent)
 
     def render(self, name, **overrides):
         return self.jinja.get_template(name).render(**(VARS | overrides))
@@ -81,8 +85,10 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual("katavti-blue-server", compose["services"]["server"]["container_name"])
         self.assertEqual("bifrost-stack_default", compose["networks"]["proxy"]["name"])
         self.assertNotIn("/var/lib/katavti/notes:/data", compose["services"]["server"]["volumes"])
+        self.assertIn("/var/lib/katavti/sessions:/sessions", compose["services"]["server"]["volumes"])
         filesystem = yaml.safe_load(self.render("docker-compose.yml.j2", katavti_azure_storage_enabled=False))
         self.assertIn("/var/lib/katavti/notes:/data", filesystem["services"]["server"]["volumes"])
+        self.assertIn("/var/lib/katavti/sessions:/sessions", filesystem["services"]["server"]["volumes"])
 
     def test_production_config_is_complete_and_secrets_are_separate(self):
         config_text = self.render("production.yaml.j2")
@@ -93,8 +99,32 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual("katavtinotesexample", config["storage"]["azure"]["accountName"])
         self.assertEqual("katavti-notes", config["storage"]["azure"]["containerName"])
         self.assertEqual("00000000-0000-0000-0000-000000000000", config["storage"]["azure"]["clientId"])
+        self.assertEqual({
+            "module": "filesystem",
+            "lazy": True,
+            "cache": True,
+            "filesystem": {"directory": "/sessions"},
+        }, config["sessions"])
         self.assertFalse(config["http"]["cors"]["allowLoopbackInDevelopment"])
+        overridden = yaml.safe_load(self.render(
+            "production.yaml.j2", katavti_sessions_lazy=False, katavti_sessions_cache=False,
+        ))
+        self.assertFalse(overridden["sessions"]["lazy"])
+        self.assertFalse(overridden["sessions"]["cache"])
         self.assertNotIn("googleClientId", config_text)
+
+    def test_session_directory_is_derived_from_the_notes_directory(self):
+        defaults = (ROOT / "roles/katavti/defaults/main.yml").read_text()
+        tasks = (ROOT / "roles/katavti/tasks/main.yml").read_text()
+        self.assertNotIn("katavti_sessions_dir:", defaults)
+        self.assertIn("katavti_sessions_module: filesystem", defaults)
+        self.assertIn("katavti_sessions_lazy: true", defaults)
+        self.assertIn("katavti_sessions_cache: true", defaults)
+        self.assertIn("katavti_sessions_module == 'filesystem'", tasks)
+        self.assertIn("katavti_sessions_lazy is boolean", tasks)
+        self.assertIn("katavti_sessions_cache is boolean", tasks)
+        self.assertIn("{{ katavti_data_dir | dirname }}/sessions", tasks)
+        self.assertIn('owner: "{{ katavti_system_user }}"', tasks)
 
     def test_activation_is_guarded_and_rollback_capable(self):
         tasks = (ROOT / "roles/katavti/tasks/activate.yml").read_text()

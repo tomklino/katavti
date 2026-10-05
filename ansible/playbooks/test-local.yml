@@ -23,6 +23,9 @@
     katavti_config_dir: /opt/katavti/config
     katavti_shared_network_name: bifrost-stack_default
     katavti_environment_type: prod
+    katavti_sessions_module: filesystem
+    katavti_sessions_lazy: true
+    katavti_sessions_cache: true
     katavti_cors_origins: [https://katavti.example.test]
     katavti_identity_header_name: x-user-id
     katavti_api_base_path: /api/v1beta
