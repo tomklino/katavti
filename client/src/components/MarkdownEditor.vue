@@ -2,9 +2,10 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import { markdown } from '@codemirror/lang-markdown'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Annotation, Compartment, EditorState } from '@codemirror/state'
 
 const readonlyCompartment = new Compartment()
+const externalUpdate = Annotation.define<boolean>()
 import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
@@ -33,7 +34,8 @@ export default defineComponent({
           readonlyCompartment.of(EditorState.readOnly.of(this.readonly)),
           EditorView.lineWrapping,
           EditorView.updateListener.of(update => {
-            if (update.docChanged) this.$emit('update:modelValue', update.state.doc.toString())
+            const external = update.transactions.some(transaction => transaction.annotation(externalUpdate))
+            if (update.docChanged && !external) this.$emit('update:modelValue', update.state.doc.toString())
           }),
         ],
       }),
@@ -44,7 +46,10 @@ export default defineComponent({
   watch: {
     modelValue(value: string) {
       if (!this.view || value === this.view.state.doc.toString()) return
-      this.view.dispatch({ changes: { from: 0, to: this.view.state.doc.length, insert: value } })
+      this.view.dispatch({
+        changes: { from: 0, to: this.view.state.doc.length, insert: value },
+        annotations: externalUpdate.of(true),
+      })
     },
     readonly(value: boolean) {
       this.view?.dispatch({ effects: readonlyCompartment.reconfigure(EditorState.readOnly.of(value)) })

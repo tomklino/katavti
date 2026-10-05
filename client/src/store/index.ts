@@ -5,17 +5,33 @@ import { notesApi, type ListQuery, type Note, type NotesApi } from '@/api/notes'
 
 export type State = {
   days: number; bug: string; noteIds: string[]; dailyIds: string[]; notes: Record<string, Note>
+  unsavedNotes: Record<string, boolean>
   loading: boolean; error: string | null; user: User | null; storageWarning: boolean; backupStatus: string
+}
+
+type SaveQueue = {
+  running: boolean
+  queued: string | null
+  waiters: Array<{ resolve: () => void; reject: (error: unknown) => void }>
 }
 
 export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi = createLocalNotesApi(), storage: Storage = localStorage): Store<State> {
   const selectedApi = (state: State) => state.user ? createSyncedNotesApi(localApi, remoteApi) : localApi
+  const devSaveDelay = import.meta.env.DEV
+    ? Math.max(0, Number(new URLSearchParams(location.search).get('devSaveDelay')) || 0)
+    : 0
+  const saveQueues = new Map<string, SaveQueue>()
   return createVuexStore<State>({
-    state: { days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
+    state: { days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
     mutations: {
       setFilter(state, query: ListQuery) { if (query.days !== undefined) state.days = query.days; state.bug = query.bug || '' },
       setIds(state, ids: string[]) { state.noteIds = ids }, setDailyIds(state, ids: string[]) { state.dailyIds = ids },
       setNote(state, { id, note }: { id: string; note: Note }) { state.notes[id] = note },
+      setNoteContent(state, { id, content }: { id: string; content: string }) {
+        const previous = state.notes[id]
+        state.notes[id] = { content, ISODateString: previous?.ISODateString || new Date().toISOString(), tags: previous?.tags || [] }
+      },
+      setNoteUnsaved(state, { id, value }: { id: string; value: boolean }) { state.unsavedNotes[id] = value },
       setLoading(state, value: boolean) { state.loading = value }, setError(state, value: string | null) { state.error = value },
       setUser(state, user: User | null) { state.user = user }, setStorageWarning(state, value: boolean) { state.storageWarning = value },
       setBackupStatus(state, value: string) { state.backupStatus = value },
@@ -58,11 +74,50 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
         const ids = await api.createDaily(count, date); commit('setDailyIds', ids)
         await Promise.all(ids.map(async id => commit('setNote', { id, note: await api.read(id) })))
       },
-      async saveNote({ state, commit }, { id, content }: { id: string; content: string }) {
-        await selectedApi(state).update(id, content)
-        const previous = state.notes[id]
-        commit('setNote', { id, note: { content, ISODateString: previous?.ISODateString || new Date().toISOString(), tags: previous?.tags || [] } })
-        if (!state.user && !sessionStorage.getItem('katavti.storage-warning-dismissed')) commit('setStorageWarning', true)
+      saveNote({ state, commit }, { id, content }: { id: string; content: string }) {
+        commit('setNoteContent', { id, content })
+        commit('setNoteUnsaved', { id, value: true })
+
+        const existing = saveQueues.get(id)
+        if (existing) {
+          existing.queued = content
+          return new Promise<void>((resolve, reject) => existing.waiters.push({ resolve, reject }))
+        }
+
+        const queue: SaveQueue = { running: true, queued: null, waiters: [] }
+        saveQueues.set(id, queue)
+        return (async () => {
+          let next: string | null = content
+          try {
+            while (next !== null) {
+              const saving = next
+              queue.queued = null
+              let attempts = 0
+              while (true) {
+                try {
+                  await selectedApi(state).update(id, saving)
+                  break
+                } catch (error) {
+                  attempts += 1
+                  if (attempts >= 3) throw error
+                  await new Promise(resolve => window.setTimeout(resolve, 500 * attempts))
+                }
+              }
+              if (devSaveDelay) await new Promise(resolve => window.setTimeout(resolve, devSaveDelay))
+              next = queue.queued
+              if (next === null && state.notes[id]?.content === saving) {
+                commit('setNoteUnsaved', { id, value: false })
+              }
+            }
+            queue.waiters.forEach(waiter => waiter.resolve())
+            if (!state.user && !sessionStorage.getItem('katavti.storage-warning-dismissed')) commit('setStorageWarning', true)
+          } catch (error) {
+            queue.waiters.forEach(waiter => waiter.reject(error))
+            throw error
+          } finally {
+            saveQueues.delete(id)
+          }
+        })()
       },
     },
   })

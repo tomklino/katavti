@@ -18,6 +18,15 @@ describe('MarkdownEditor', () => {
     expect(focus).toHaveBeenCalledOnce()
   })
 
+  it('does not emit an edit when modelValue is updated externally', async () => {
+    const wrapper = mount(MarkdownEditor, { props: { modelValue: '' } })
+
+    await wrapper.setProps({ modelValue: '# Loaded note' })
+
+    expect(wrapper.get('.cm-content').text()).toContain('Loaded note')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
   it('emits edited markdown', async () => {
     const wrapper = mount(MarkdownEditor, { props: { modelValue: '# Old' } })
     const component = wrapper.vm as any

@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import NoteCard from '@/components/NoteCard.vue'
 import { createStore } from '@/store'
 
@@ -11,13 +11,15 @@ const api = {
 }
 
 function mountCard(active: boolean, content = '# Compact title\nFull note body', startRaw = true) {
-  const store = createStore(api)
+  const store = createStore(api, api)
   store.commit('setNote', {
     id: 'note-1',
     note: { content, ISODateString: '2026-09-25T00:00:00.000Z', tags: [] },
   })
   return mount(NoteCard, { props: { id: 'note-1', active, editable: true, startRaw }, global: { plugins: [store] } })
 }
+
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
 describe('NoteCard focus states', () => {
   it('shows only the title while compacted', () => {
@@ -60,5 +62,54 @@ describe('NoteCard focus states', () => {
     await wrapper.setProps({ active: true })
     await wrapper.vm.$nextTick()
     expect(focus).toHaveBeenCalledOnce()
+  })
+
+  it('waits for two seconds without typing before saving', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountCard(true)
+    const dispatch = vi.spyOn(wrapper.vm.$store, 'dispatch')
+    ;(wrapper.vm as any).edit('first')
+    await vi.advanceTimersByTimeAsync(1500)
+    ;(wrapper.vm as any).edit('latest')
+    await vi.advanceTimersByTimeAsync(1999)
+    expect(dispatch).not.toHaveBeenCalledWith('saveNote', expect.anything())
+    await vi.advanceTimersByTimeAsync(1)
+    expect(dispatch).toHaveBeenCalledWith('saveNote', { id: 'note-1', content: 'latest' })
+  })
+
+  it('flushes a pending edit when the component is unmounted', async () => {
+    vi.useFakeTimers()
+    const update = vi.spyOn(api, 'update')
+    const wrapper = mountCard(true)
+    ;(wrapper.vm as any).edit('save before leaving')
+
+    wrapper.unmount()
+    await Promise.resolve()
+
+    expect(update).toHaveBeenCalledWith('note-1', 'save before leaving')
+  })
+
+  it('flushes a pending edit when the page is hidden', async () => {
+    vi.useFakeTimers()
+    const update = vi.spyOn(api, 'update')
+    const wrapper = mountCard(true)
+    ;(wrapper.vm as any).edit('save before closing')
+
+    window.dispatchEvent(new Event('pagehide'))
+    await Promise.resolve()
+
+    expect(update).toHaveBeenCalledWith('note-1', 'save before closing')
+    wrapper.unmount()
+  })
+
+  it('shows an unsaved editor border until persistence finishes', async () => {
+    const wrapper = mountCard(true)
+    expect(wrapper.find('.markdown-editor').classes()).not.toContain('unsaved')
+    wrapper.vm.$store.commit('setNoteUnsaved', { id: 'note-1', value: true })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.markdown-editor').classes()).toContain('unsaved')
+    wrapper.vm.$store.commit('setNoteUnsaved', { id: 'note-1', value: false })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.markdown-editor').classes()).not.toContain('unsaved')
   })
 })

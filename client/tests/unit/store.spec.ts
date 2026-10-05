@@ -36,6 +36,54 @@ describe('notes Vuex store', () => {
     expect(api.update).toHaveBeenCalledWith('note-1', 'changed')
   })
 
+  it('keeps one save in flight and replaces the single queued save with the latest edit', async () => {
+    let finishFirst!: () => void
+    api.update
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishFirst = () => resolve('note-1') }))
+      .mockResolvedValue('note-1')
+    const store = createStore(api, api)
+    store.commit('setNote', { id: 'note-1', note: { content: 'initial', ISODateString: '', tags: [] } })
+
+    const first = store.dispatch('saveNote', { id: 'note-1', content: 'first' })
+    await Promise.resolve()
+    const replaced = store.dispatch('saveNote', { id: 'note-1', content: 'second' })
+    const latest = store.dispatch('saveNote', { id: 'note-1', content: 'latest' })
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(store.state.notes['note-1'].content).toBe('latest')
+    expect(store.state.unsavedNotes['note-1']).toBe(true)
+
+    finishFirst()
+    await Promise.all([first, replaced, latest])
+
+    expect(api.update.mock.calls).toEqual([
+      ['note-1', 'first'],
+      ['note-1', 'latest'],
+    ])
+    expect(store.state.notes['note-1'].content).toBe('latest')
+    expect(store.state.unsavedNotes['note-1']).toBe(false)
+  })
+
+  it('retries a failed save', async () => {
+    vi.useFakeTimers()
+    api.update
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockResolvedValue('note-1')
+    const store = createStore(api, api)
+    store.commit('setNote', { id: 'note-1', note: { content: 'initial', ISODateString: '', tags: [] } })
+
+    const save = store.dispatch('saveNote', { id: 'note-1', content: 'latest' })
+    await vi.runAllTimersAsync()
+    await save
+
+    expect(api.update.mock.calls).toEqual([
+      ['note-1', 'latest'],
+      ['note-1', 'latest'],
+    ])
+    expect(store.state.unsavedNotes['note-1']).toBe(false)
+    vi.useRealTimers()
+  })
+
   it('backs up pre-login notes and keeps them visible after login', async () => {
     const storage = memoryStorage()
     const localApi = {

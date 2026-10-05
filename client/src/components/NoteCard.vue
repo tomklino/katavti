@@ -9,7 +9,7 @@
       </div>
     </header>
     <div class="note-body" :aria-hidden="!active">
-      <MarkdownEditor v-if="raw" ref="editor" :model-value="note.content" :readonly="!editable" @update:model-value="edit" />
+      <MarkdownEditor v-if="raw" ref="editor" :class="{ unsaved }" :model-value="note.content" :readonly="!editable" @update:model-value="edit" />
       <div v-else class="rendered" v-html="rendered" />
     </div>
   </article>
@@ -23,21 +23,37 @@ import { markdown } from '@/markdown'
 export default defineComponent({
   components: { MarkdownEditor },
   props: { id: { type: String, required: true }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean },
-  data() { return { raw: this.startRaw, copyLabel: 'Copy', timer: 0 } },
+  data() { return { raw: this.startRaw, copyLabel: 'Copy', timer: 0, pendingContent: null as string | null } },
   computed: {
     note(): any { return this.$store.state.notes[this.id] || { content: '', ISODateString: new Date().toISOString() } },
     title(): string { return this.note.content.split('\n').find((line: string) => line.trim())?.replace(/^#+\s*/, '') || 'Untitled note' },
     formattedDate(): string { return new Date(this.note.ISODateString).toLocaleDateString() },
     rendered(): string { return markdown.render(this.note.content) },
+    unsaved(): boolean { return Boolean(this.$store.state.unsavedNotes[this.id]) },
   },
   watch: {
     active(value: boolean) { if (value) this.focusEditor() },
   },
+  mounted() { window.addEventListener('pagehide', this.flushPendingEdit) },
+  beforeUnmount() {
+    window.removeEventListener('pagehide', this.flushPendingEdit)
+    this.flushPendingEdit()
+  },
   methods: {
     focusEditor() { this.$nextTick(() => (this.$refs.editor as any)?.focus()) },
     edit(content: string) {
+      this.$store.commit('setNoteContent', { id: this.id, content })
+      this.$store.commit('setNoteUnsaved', { id: this.id, value: true })
+      this.pendingContent = content
       clearTimeout(this.timer)
-      this.timer = window.setTimeout(() => this.$store.dispatch('saveNote', { id: this.id, content }), 500)
+      this.timer = window.setTimeout(this.flushPendingEdit, 2000)
+    },
+    flushPendingEdit() {
+      if (this.pendingContent === null) return
+      clearTimeout(this.timer)
+      const content = this.pendingContent
+      this.pendingContent = null
+      this.$store.dispatch('saveNote', { id: this.id, content }).catch(() => undefined)
     },
     async copy() { await navigator.clipboard.writeText(this.note.content); this.copyLabel = 'Copied!'; window.setTimeout(() => { this.copyLabel = 'Copy' }, 1500) },
   },
@@ -60,6 +76,8 @@ time { color: #64748b; font-size: .85rem; }
 .actions { white-space: nowrap; }
 .note-body { height: calc(100% - 2.5rem); opacity: 0; overflow: auto; pointer-events: none; transition: opacity 120ms ease; visibility: hidden; }
 .note.active .note-body { opacity: 1; pointer-events: auto; transition-delay: 80ms; visibility: visible; }
+.markdown-editor { border: 2px solid transparent; box-sizing: border-box; }
+.markdown-editor.unsaved { border-style: dashed; border-color: #d97706; }
 button { margin-left: .75rem; }
 .rendered { line-height: 1.55; padding: .25rem .25rem 1rem; text-align: left; }
 .rendered :deep(h1), .rendered :deep(h2), .rendered :deep(h3), .rendered :deep(h4), .rendered :deep(h5), .rendered :deep(h6) { line-height: 1.25; margin: 1em 0 .45em; }
