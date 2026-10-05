@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { OAuth2Client } from 'google-auth-library'
 import nodemailer from 'nodemailer'
+import { SessionManager, type SessionBackend } from './session-manager.js'
 
 export type AuthUser = { email: string; name?: string; picture?: string }
 type PendingLink = { email: string; expiresAt: number }
@@ -22,10 +23,15 @@ export function createAuthService(options: {
   mailFrom: string
   now?: () => number
   sendMail?: (message: { to: string; from: string; subject: string; text: string; html: string }) => Promise<unknown>
+  sessions?: SessionManager<AuthUser>
 }) {
   const google = options.googleClientId ? new OAuth2Client(options.googleClientId) : undefined
   const pending = new Map<string, PendingLink>()
-  const sessions = new Map<string, AuthUser>()
+  const memoryBackend: SessionBackend<AuthUser> = {
+    load: async () => new Map(), get: async () => undefined, save: async () => {}, delete: async () => {},
+  }
+  let sessions = options.sessions
+  const sessionsReady = sessions ? Promise.resolve(sessions) : SessionManager.initialize(memoryBackend).then(value => (sessions = value))
   const now = options.now ?? Date.now
   const transport = options.smtpOAuth
     ? nodemailer.createTransport({
@@ -69,9 +75,9 @@ export function createAuthService(options: {
     return createSession(user)
   }
 
-  function createSession(user: AuthUser) {
+  async function createSession(user: AuthUser) {
     const session = randomBytes(32).toString('base64url')
-    sessions.set(session, user)
+    await (await sessionsReady).set(session, user)
     return { session, user }
   }
 
@@ -83,8 +89,8 @@ export function createAuthService(options: {
     return createSession({ email: normalizedEmail(payload.email), name: payload.name, picture: payload.picture })
   }
 
-  function userForSession(session?: string) { return session ? sessions.get(session) : undefined }
-  function signOut(session?: string) { if (session) sessions.delete(session) }
+  async function userForSession(session?: string) { return sessions ? sessions.get(session) : undefined }
+  async function signOut(session?: string) { await (await sessionsReady).delete(session) }
 
   return { requestMagicLink, consumeMagicLink, signInWithGoogle, userForSession, signOut }
 }

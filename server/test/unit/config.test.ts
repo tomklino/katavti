@@ -16,6 +16,36 @@ async function tempFiles(files: Record<string, string>) {
 afterEach(async () => Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true }))))
 
 describe('configuration loading', () => {
+  it('selects and configures the session module from environment variables', async () => {
+    const directory = await tempFiles({
+      'defaults.yaml': `environmentType: dev\nserver: {host: localhost, port: 3030}\nstorage: {dataDir: ./notes}\nhttp:\n  cors: {origins: [http://localhost:8080], allowLoopbackInDevelopment: true}\n  identity: {headerName: x-user-id}\napi: {basePath: /api}\nconfig: {files: [], secretFiles: []}\n`,
+    })
+
+    const config = await loadConfig({
+      defaultsFile: path.join(directory, 'defaults.yaml'), cwd: directory, argv: [],
+      env: { KATAVTI_SESSIONS_MODULE: 'filesystem', KATAVTI_SESSIONS_FILESYSTEM_DIRECTORY: './sessions' },
+    })
+
+    expect(config.sessions).toEqual({
+      module: 'filesystem', lazy: true, cache: true,
+      filesystem: { directory: path.join(directory, 'sessions') },
+    })
+  })
+
+  it('allows lazy loading and caching to be disabled through configuration', async () => {
+    const directory = await tempFiles({
+      'defaults.yaml': `environmentType: dev\nserver: {host: localhost, port: 3030}\nstorage: {dataDir: ./notes}\nsessions:\n  module: filesystem\n  filesystem: {directory: ./sessions}\nhttp:\n  cors: {origins: [http://localhost:8080], allowLoopbackInDevelopment: true}\n  identity: {headerName: x-user-id}\napi: {basePath: /api}\nconfig: {files: [], secretFiles: []}\n`,
+    })
+
+    const config = await loadConfig({
+      defaultsFile: path.join(directory, 'defaults.yaml'), cwd: directory, argv: [],
+      env: { KATAVTI_SESSIONS_LAZY: 'false', KATAVTI_SESSIONS_CACHE: 'false' },
+    })
+
+    expect(config.sessions.lazy).toBe(false)
+    expect(config.sessions.cache).toBe(false)
+  })
+
   it('loads Azure storage configuration without requiring a filesystem data directory', async () => {
     const directory = await tempFiles({
       'defaults.yaml': `environmentType: dev\nserver:\n  host: localhost\n  port: 3030\nstorage:\n  module: azure\n  azure:\n    connectionString: UseDevelopmentStorage=true\n    containerName: notes\nhttp:\n  cors:\n    origins: [http://localhost:8080]\n    allowLoopbackInDevelopment: true\n  identity:\n    headerName: x-user-id\napi:\n  basePath: /api\nconfig:\n  files: []\n  secretFiles: []\n`,
@@ -109,7 +139,7 @@ describe('configuration loading', () => {
   it('loads prod entirely from non-default sources', async () => {
     const directory = await tempFiles({
       'defaults.yaml': `environmentType: dev\nserver:\n  host: forbidden-default\n  port: 1000\n`,
-      'prod.yaml': `environmentType: prod\nserver:\n  host: prod-host\n  port: 4000\nstorage:\n  dataDir: ./prod-data\nhttp:\n  cors:\n    origins: [https://prod.test]\n    allowLoopbackInDevelopment: false\n  identity:\n    headerName: x-user-id\napi:\n  basePath: /api/v1\nconfig:\n  files: []\n  secretFiles: []\n`,
+      'prod.yaml': `environmentType: prod\nserver:\n  host: prod-host\n  port: 4000\nstorage:\n  dataDir: ./prod-data\nsessions:\n  module: filesystem\n  filesystem:\n    directory: ./sessions\nhttp:\n  cors:\n    origins: [https://prod.test]\n    allowLoopbackInDevelopment: false\n  identity:\n    headerName: x-user-id\napi:\n  basePath: /api/v1\nconfig:\n  files: []\n  secretFiles: []\n`,
     })
     const config = await loadConfig({
       defaultsFile: path.join(directory, 'defaults.yaml'), cwd: directory,

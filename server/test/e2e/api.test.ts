@@ -19,6 +19,7 @@ beforeEach(async () => {
     environmentType: 'dev',
     server: { host: '127.0.0.1', port: 0 },
     storage: { dataDir },
+    sessions: { module: 'filesystem', lazy: true, cache: true, filesystem: { directory: path.join(dataDir, 'sessions') } },
     http: { cors: { origins: ['http://client.test'], allowLoopbackInDevelopment: true }, identity: { headerName: 'x-user-id' } },
     api: { basePath: '/api/v1beta' },
     auth: { googleClientId: '', magicLinkBaseUrl: 'http://katavti.local', smtpUrl: '', mailFrom: 'test@katavti.local' },

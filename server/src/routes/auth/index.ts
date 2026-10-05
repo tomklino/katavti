@@ -10,16 +10,16 @@ export function authRoutes(auth: AuthService, secureCookies: boolean) {
     httpOnly: true, sameSite: 'Lax', secure: secureCookies, path: '/', maxAge: 60 * 60 * 24 * 30,
   })
 
-  routes.get('/session', c => c.json({ user: auth.userForSession(getCookie(c, sessionCookie)) ?? null }))
+  routes.get('/session', async c => c.json({ user: await auth.userForSession(getCookie(c, sessionCookie)) ?? null }))
   routes.post('/magic-link', async c => {
     try {
       const body = await c.req.json()
       return c.json({ sent: true, ...await auth.requestMagicLink(body.email) })
     } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Unable to send magic link' }, 400) }
   })
-  routes.get('/magic-link/verify', c => {
+  routes.get('/magic-link/verify', async c => {
     try {
-      const { session, user } = auth.consumeMagicLink(c.req.query('token') || '')
+      const { session, user } = await auth.consumeMagicLink(c.req.query('token') || '')
       setSession(c, session)
       return c.json({ user })
     } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Unable to sign in' }, 401) }
@@ -32,15 +32,15 @@ export function authRoutes(auth: AuthService, secureCookies: boolean) {
       return c.json({ user })
     } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Unable to sign in' }, 401) }
   })
-  routes.post('/logout', c => {
-    auth.signOut(getCookie(c, sessionCookie))
+  routes.post('/logout', async c => {
+    await auth.signOut(getCookie(c, sessionCookie))
     deleteCookie(c, sessionCookie, { path: '/' })
     return c.json({ ok: true })
   })
   return routes
 }
 
-export function sessionUser(auth: AuthService, cookieHeader?: string) {
+export async function sessionUser(auth: AuthService, cookieHeader?: string) {
   const match = cookieHeader?.match(/(?:^|;\s*)katavti_session=([^;]+)/)
-  return auth.userForSession(match?.[1])
+  return await auth.userForSession(match?.[1])
 }

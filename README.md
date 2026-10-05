@@ -39,6 +39,10 @@ Configure additional files with `KATAVTI_CONFIG_FILES=config-local.yaml` and `KA
 | `storage.azure.accountName` | `KATAVTI_STORAGE_AZURE_ACCOUNT_NAME` | `--storage.azure.accountName=katavtinotes` |
 | `storage.azure.containerName` | `KATAVTI_STORAGE_AZURE_CONTAINER_NAME` | `--storage.azure.containerName=notes` |
 | `storage.azure.clientId` | `KATAVTI_STORAGE_AZURE_CLIENT_ID` | `--storage.azure.clientId=...` |
+| `sessions.module` | `KATAVTI_SESSIONS_MODULE` | `--sessions.module=filesystem` |
+| `sessions.lazy` | `KATAVTI_SESSIONS_LAZY` | `--sessions.lazy=true` |
+| `sessions.cache` | `KATAVTI_SESSIONS_CACHE` | `--sessions.cache=true` |
+| `sessions.filesystem.directory` | `KATAVTI_SESSIONS_FILESYSTEM_DIRECTORY` | `--sessions.filesystem.directory=/srv/katavti-sessions` |
 | `http.cors.origins` | `KATAVTI_HTTP_CORS_ORIGINS` | `--http.cors.origins=http://localhost:8080` |
 | `http.cors.allowLoopbackInDevelopment` | `KATAVTI_HTTP_CORS_ALLOW_LOOPBACK_IN_DEVELOPMENT` | `--http.cors.allowLoopbackInDevelopment=true` |
 | `http.identity.headerName` | `KATAVTI_HTTP_IDENTITY_HEADER_NAME` | `--http.identity.headerName=x-user-id` |
@@ -49,6 +53,8 @@ Configure additional files with `KATAVTI_CONFIG_FILES=config-local.yaml` and `KA
 List values supplied through environment or CLI are comma-separated. Invalid configuration is reported as a complete list of validation errors and startup fails.
 
 Set `storage.module` to `filesystem` and provide `storage.dataDir`, or set it to `azure` and provide `storage.azure.containerName` plus either `storage.azure.connectionString` or `storage.azure.accountName`. With an account name, Azure identity credentials are used; `storage.azure.clientId` selects a user-assigned managed identity.
+
+Sessions use a separately selected backend so authentication does not depend on note storage. Currently `sessions.module: filesystem` is supported and requires `sessions.filesystem.directory`. Session lookup is lazy by default: the backend reads a session when it is needed. `sessions.cache` retains successfully loaded sessions in process memory. Both `sessions.lazy` and `sessions.cache` default to `true`; disabling lazy loading loads all sessions during startup, while disabling caching reads the backend on every lookup.
 
 ## Develop
 

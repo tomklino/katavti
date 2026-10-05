@@ -3,10 +3,14 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createApp } from './app.js'
 import { ConfigError, loadConfig, type AppConfig } from './config/index.js'
+import { createSessionManager } from './session-modules/index.js'
+import { createAuthService, type AuthUser } from './services/auth-service.js'
 
 export async function startServer(config: AppConfig) {
+  const sessions = await createSessionManager<AuthUser>(config.sessions)
+  const auth = createAuthService({ ...config.auth, sessions })
   const server = serve({
-    fetch: createApp(config).fetch,
+    fetch: createApp(config, undefined, auth).fetch,
     hostname: config.server.host,
     port: config.server.port,
   })

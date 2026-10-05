@@ -32,7 +32,7 @@ export function createApp(config: AppConfig, injectedNotesData?: NotesData, inje
   app.route(`${apiPath}/health`, healthRoutes())
   app.route(`${apiPath}/auth`, authRoutes(auth, config.environmentType === 'prod'))
   app.use(`${apiPath}/notes/*`, async (c, next) => {
-    const user = sessionUser(auth, c.req.header('cookie'))
+    const user = await sessionUser(auth, c.req.header('cookie'))
     if (!user) return c.json({ error: 'Unauthenticated' }, 401)
     c.set('userId', user.email)
     await next()

@@ -1,15 +1,37 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAuthService } from '../../src/services/auth-service.js'
+import { SessionManager, type SessionBackend } from '../../src/services/session-manager.js'
 
 describe('auth service magic links', () => {
+  it('uses an injected session manager instead of owning session storage', async () => {
+    type User = { email: string; name?: string; picture?: string }
+    const persisted = new Map<string, User>()
+    const backend: SessionBackend<User> = {
+      load: async () => new Map(persisted),
+      get: async token => persisted.get(token),
+      save: async (token, user) => { persisted.set(token, user) },
+      delete: async token => { persisted.delete(token) },
+    }
+    const sessions = await SessionManager.initialize(backend)
+    const auth = createAuthService({ magicLinkBaseUrl: 'http://katavti.local', mailFrom: 'test@katavti.local', sessions })
+    const requested = await auth.requestMagicLink('alice@example.com')
+    const token = new URL(requested.developmentUrl!).searchParams.get('token')!
+    const signedIn = await auth.consumeMagicLink(token)
+
+    const restartedSessions = await SessionManager.initialize(backend)
+    const restartedAuth = createAuthService({ magicLinkBaseUrl: 'http://katavti.local', mailFrom: 'test@katavti.local', sessions: restartedSessions })
+
+    await expect(restartedAuth.userForSession(signedIn.session)).resolves.toEqual({ email: 'alice@example.com' })
+  })
+
   it('sends a one-use link and creates a session for its email', async () => {
     const sendMail = vi.fn().mockResolvedValue(undefined)
     const auth = createAuthService({ magicLinkBaseUrl: 'http://katavti.local', mailFrom: 'test@katavti.local', sendMail, now: () => 1000 })
     await auth.requestMagicLink('Alice@Example.com')
     const url = new URL(sendMail.mock.calls[0][0].text.split(': ').at(-1))
-    const result = auth.consumeMagicLink(url.searchParams.get('token')!)
+    const result = await auth.consumeMagicLink(url.searchParams.get('token')!)
     expect(result.user.email).toBe('alice@example.com')
-    expect(auth.userForSession(result.session)).toEqual(result.user)
+    await expect(auth.userForSession(result.session)).resolves.toEqual(result.user)
     expect(() => auth.consumeMagicLink(url.searchParams.get('token')!)).toThrow(/invalid or expired/)
   })
 

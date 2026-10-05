@@ -5,6 +5,7 @@ import type { AppConfig } from '../../src/config/index.js'
 const config: AppConfig = {
   environmentType: 'dev',
   server: { host: '127.0.0.1', port: 3000 }, storage: { dataDir: '/tmp/notes' },
+  sessions: { module: 'filesystem', lazy: true, cache: true, filesystem: { directory: '/tmp/sessions' } },
   http: { cors: { origins: ['https://client.test'], allowLoopbackInDevelopment: true }, identity: { headerName: 'x-person-id' } },
   api: { basePath: '/custom/v3' }, auth: { googleClientId: '', magicLinkBaseUrl: 'https://client.test', smtpUrl: '', mailFrom: 'test@katavti.local' }, config: { files: [], secretFiles: [] },
 }

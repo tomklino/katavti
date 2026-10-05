@@ -5,6 +5,12 @@ server:
 storage:
   module: filesystem
   dataDir: ./data
+sessions:
+  module: filesystem
+  lazy: true
+  cache: true
+  filesystem:
+    directory: ./data/sessions
 http:
   cors:
     origins:
