@@ -12,12 +12,20 @@
         <router-link to="/daily">Daily</router-link>
         <router-link to="/" exact-active-class="router-link-exact-active">All notes</router-link>
       </nav>
-      <div class="filters">
-        <select v-model.number="days" aria-label="Look back period" @change="searchDays"><option :value="5">5 days</option><option :value="28">4 weeks</option><option :value="90">3 months</option><option :value="365">1 year</option></select>
-        <form class="label-search" role="search" @submit.prevent="searchLabel"><input v-model="bug" aria-label="Search label" placeholder="Find a label…"><button v-if="$store.state.bug" type="button" aria-label="Clear label filter" @click="clearLabel">×</button><button type="submit">Search</button></form>
+      <div v-if="$route.name === 'home'" class="filters">
+        <LookbackMenu :model-value="days" :active="!labelActive" @update:model-value="searchDays" />
+        <form class="label-search" role="search" @submit.prevent="searchLabel">
+          <span v-if="labelActive" class="label-chip" :title="`Active label: ${$store.state.bug}`">
+            <span class="label-chip-text">{{ $store.state.bug }}</span>
+            <button type="button" class="clear-label" aria-label="Clear label filter" title="Clear label filter" @click="clearLabel"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m5 5 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg></button>
+          </span>
+          <input v-model="bug" aria-label="Search label" aria-describedby="filter-status" :placeholder="labelActive ? 'Label…' : 'Find a label…'">
+          <button type="submit" class="search-submit" :disabled="!bug.trim()">Search</button>
+        </form>
+        <span id="filter-status" class="filter-status" role="status">{{ labelActive ? `Filtering by label: ${$store.state.bug}` : `Filtering by the last ${days} days` }}</span>
       </div>
       <div class="header-account">
-        <select v-model="theme" class="theme-select" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+        <ThemeToggle v-model="theme" />
         <LoginPanel />
       </div>
     </header>
@@ -28,25 +36,37 @@
 import { defineComponent } from 'vue'
 import LoginPanel from '@/components/LoginPanel.vue'
 import MessageBar from '@/components/MessageBar.vue'
+import LookbackMenu from '@/components/LookbackMenu.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import { initialTheme, rememberTheme, resolveTheme, type Theme } from '@/theme'
 export default defineComponent({
-  components: { LoginPanel, MessageBar },
+  components: { LoginPanel, MessageBar, LookbackMenu, ThemeToggle },
   created() { this.$store.dispatch('initializeAuth').catch(() => undefined) },
-  data() { return { days: this.$store.state.days, bug: this.$store.state.bug, theme: initialTheme(), systemDark: false, colorQuery: null as MediaQueryList | null } },
-  computed: { resolvedTheme(): 'light' | 'dark' { return resolveTheme(this.theme, this.systemDark) } },
+  data() { return { days: this.$store.state.days, bug: '', theme: initialTheme(), systemDark: false, colorQuery: null as MediaQueryList | null } },
+  computed: {
+    resolvedTheme(): 'light' | 'dark' { return resolveTheme(this.theme, this.systemDark) },
+    labelActive(): boolean { return Boolean(this.$store.state.bug) },
+  },
   mounted() {
     this.colorQuery = window.matchMedia('(prefers-color-scheme: dark)')
     this.systemDark = this.colorQuery.matches
     this.colorQuery.addEventListener('change', this.systemThemeChanged)
   },
   beforeUnmount() { this.colorQuery?.removeEventListener('change', this.systemThemeChanged) },
-  watch: { theme(value: Theme) { rememberTheme(value) }, '$store.state.bug'(value: string) { this.bug = value }, '$store.state.days'(value: number) { this.days = value } },
+  watch: { theme(value: Theme) { rememberTheme(value) }, '$store.state.days'(value: number) { this.days = value } },
   methods: {
     systemThemeChanged(event: MediaQueryListEvent) { this.systemDark = event.matches },
-    goHome() { if (this.$route.path !== '/') this.$router.push('/') },
-    searchDays() { this.goHome(); this.$store.dispatch('loadNotes', { days: this.days }).catch(() => undefined) },
-    searchLabel() { this.goHome(); this.$store.dispatch('loadNotes', this.bug ? { bug: this.bug } : { days: this.days }).catch(() => undefined) },
-    clearLabel() { this.bug = ''; this.searchLabel() },
+    searchDays(days: number) {
+      this.days = days
+      this.$store.dispatch('loadNotes', { days: this.days }).catch(() => undefined)
+    },
+    searchLabel() {
+      const label = this.bug.trim()
+      if (!label) return
+      this.bug = ''
+      this.$store.dispatch('loadNotes', { bug: label }).catch(() => undefined)
+    },
+    clearLabel() { this.$store.dispatch('loadNotes', { days: this.days }).catch(() => undefined) },
   },
 })
 </script>

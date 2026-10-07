@@ -66,9 +66,9 @@ The committed configuration uses API port 3030 and Vite uses 8080 internally. Th
 
 ### Compact notes workspace
 
-The final interface combines Ink’s compact top navigation with Studio’s light palette. The **Color theme** control offers **System**, **Light**, and **Dark**; dark mode retains Ink’s original palette. It follows the OS by default and remembers explicit choices in both development and production. Theme changes do not remount editors or interrupt pending saves. The prototype design panel has been retired.
+The final interface combines Ink’s compact top navigation with Studio’s light palette. The **Color theme** toggle offers sun (**Light**), monitor (**System**), and moon (**Dark**) buttons; dark mode retains Ink’s original palette. It follows the OS by default and remembers explicit choices in both development and production. Theme changes do not remount editors or interrupt pending saves. The prototype design panel has been retired.
 
-**Daily** fills the remaining viewport height, with one expanded writing area and compact note headers. The notes collection never scrolls; long text scrolls inside the active editor or preview. When there are too many notes to keep a usable editor, previous/next controls page the headers. **All Notes** expands every note to its natural height in a single scrolling reading feed. Exact-label search, lookback, Markdown/raw mode, copy, and autosave remain available.
+**Daily** fills the remaining viewport height, with one expanded writing area and compact note headers. The notes collection never scrolls; long text scrolls inside the active editor or preview. When there are too many notes to keep a usable editor, previous/next controls page the headers. **All Notes** expands every note to its natural height in a single scrolling reading feed. Exact-label search and lookback appear only in **All Notes**: the themed lookback menu highlights the selected range, while a label search highlights a removable chip instead. Short labels stay fully visible; long labels truncate without crowding the search or removal controls. The menu supports arrow keys, Home/End, and Escape. Markdown/raw mode, copy, and autosave remain available.
 
 To reproduce the headless visual review against a running dev server (Chrome must be installed):
 
@@ -76,7 +76,7 @@ To reproduce the headless visual review against a running dev server (Chrome mus
 KATAVTI_UI_URL=http://localhost:8082 node scripts/ui-review.mjs
 ```
 
-The script uses a fresh, anonymous browser context, creates 12 mock notes through the editor, verifies persistence, theme preferences, expanded reading, non-scrolling Daily, header pagination, and label filtering, and captures nine views per theme (including mobile). It does not touch your real browser notes or API notes. Set `CHROME_PATH` if Chrome is not in its standard location. The generated `final-light-*.png` and `final-dark-*.png` screenshots, mock-note export, and comparison gallery are in the Git-ignored `.ui-review/` directory; open `.ui-review/index.html` to compare them. Earlier prototype screenshots remain alongside them.
+The script uses a fresh, anonymous browser context, creates 12 mock notes through the editor, verifies persistence, theme preferences, expanded reading, non-scrolling Daily, header pagination, label filtering, and short/long label sizing from 320–1440px, and captures eleven views per theme (including the lookback menu and mobile labels). It does not touch your real browser notes or API notes. Set `CHROME_PATH` if Chrome is not in its standard location. The generated `final-light-*.png` and `final-dark-*.png` screenshots, mock-note export, and comparison gallery are in the Git-ignored `.ui-review/` directory; open `.ui-review/index.html` to compare them. Earlier prototype screenshots remain alongside them.
 
 ### Local Kubernetes with K3s
 

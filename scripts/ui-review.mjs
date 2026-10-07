@@ -38,7 +38,8 @@ const capture = async name => {
   await page.screenshot({ path: new URL(`${name}.png`, output).pathname })
 }
 const choose = async theme => {
-  await page.getByRole('combobox', { name: 'Color theme', exact: true }).selectOption(theme)
+  await page.getByRole('button', { name: `${theme[0].toUpperCase()}${theme.slice(1)} theme`, exact: true }).click()
+  assert.equal(await page.getByRole('button', { name: `${theme[0].toUpperCase()}${theme.slice(1)} theme`, exact: true }).getAttribute('aria-pressed'), 'true')
   assert.equal(await page.locator('[data-theme]').getAttribute('data-theme'), theme)
 }
 const activateDaily = async index => {
@@ -57,6 +58,10 @@ const fixedDaily = async () => {
 
 try {
   await page.goto(`${url}/daily`)
+  assert.equal(await page.locator('link[rel="icon"]').getAttribute('href'), '/favicon.svg')
+  const favicon = await context.request.get(`${url}/favicon.svg`)
+  assert.ok(favicon.ok())
+  assert.match(await favicon.text(), />k·<\/text>/)
   await page.locator('.note').first().waitFor()
   for (let index = 0; index < notes.length; index++) {
     if (index >= 4) await page.getByRole('button', { name: 'Add note', exact: true }).click()
@@ -80,11 +85,19 @@ try {
     await page.getByRole('link', { name: /^All notes/ }).click()
     await page.waitForTimeout(150)
     assert.equal(await page.locator('.note').count(), 12)
+    assert.equal(await page.locator('.filters').count(), 1)
+    assert.equal(await page.locator('.days-filter.is-active').count(), 1)
+    assert.equal(await page.locator('.label-chip').count(), 0)
     assert.equal(await page.locator('.note.active.browsing').count(), 12)
     assert.equal(await page.locator('.note-body[aria-hidden="false"]').count(), 12)
     assert.ok(await page.locator('.notes').evaluate(element => element.scrollHeight > element.clientHeight))
     assert.ok(await page.locator('.note-body').evaluateAll(elements => elements.every(element => element.scrollHeight <= element.clientHeight + 1)))
     await capture(`${design}-history`)
+    await page.getByRole('button', { name: 'Look back period', exact: true }).click()
+    assert.equal(await page.getByRole('menuitemradio', { checked: true }).innerText(), '5 days')
+    await capture(`${design}-lookback`)
+    await page.keyboard.press('Escape')
+    assert.equal(await page.getByRole('menu').count(), 0)
     await page.locator('.notes').evaluate(element => { element.scrollTop = element.scrollHeight })
     await capture(`${design}-history-bottom`)
     await page.locator('.notes').evaluate(element => { element.scrollTop = 0 })
@@ -92,7 +105,18 @@ try {
     await page.getByRole('button', { name: 'Search', exact: true }).click()
     await page.waitForTimeout(150)
     assert.equal(await page.locator('.note').count(), 2)
+    assert.equal(await page.locator('.days-filter.is-active').count(), 0)
+    assert.equal(await page.locator('.label-chip-text').innerText(), 'planning')
+    assert.equal(await page.getByRole('button', { name: 'Look back period', exact: true }).innerText(), 'Look back')
     await capture(`${design}-label-search`)
+    // Selecting even the previous range must switch out of label mode.
+    await page.getByRole('button', { name: 'Look back period', exact: true }).click()
+    assert.equal(await page.getByRole('menuitemradio', { checked: true }).count(), 0)
+    await page.getByRole('menuitemradio', { name: '5 days', exact: true }).click()
+    await page.waitForTimeout(150)
+    assert.equal(await page.locator('.note').count(), 12)
+    assert.equal(await page.locator('.days-filter.is-active').count(), 1)
+    assert.equal(await page.locator('.label-chip').count(), 0)
     await page.getByRole('textbox', { name: 'Search label', exact: true }).fill('not-a-label')
     await page.getByRole('button', { name: 'Search', exact: true }).click()
     await page.getByRole('heading', { name: 'No thoughts with that label.' }).waitFor()
@@ -100,6 +124,7 @@ try {
     await page.getByRole('button', { name: 'Clear label filter', exact: true }).click()
     await page.getByRole('link', { name: /^Daily/ }).click()
     await page.locator('.note.active .cm-content').waitFor()
+    assert.equal(await page.locator('.filters').count(), 0)
     await fixedDaily()
     await capture(`${design}-daily-raw`)
     await page.locator('.raw-toggle input').uncheck()
@@ -120,6 +145,60 @@ try {
     assert.equal(await page.locator('.note.active.browsing').count(), 12)
     await capture(`${design}-mobile-history`)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390)
+    // Short labels must be completely visible; long labels must leave input and removal usable.
+    for (const label of ['ABC', 'a-very-long-label-that-should-truncate-without-crowding-the-controls']) {
+      await page.getByRole('textbox', { name: 'Search label', exact: true }).fill(label)
+      await page.getByRole('button', { name: 'Search', exact: true }).click()
+      for (const scale of [1, 1.25, 1.5]) {
+        await page.evaluate(value => { document.body.style.zoom = String(value) }, scale)
+        for (const width of [320, 360, 390, 760, 761, 768, 780, 1000, 1001, 1440]) {
+          await page.setViewportSize({ width, height: 844 })
+          const layout = await page.locator('.label-chip-text').evaluate(element => {
+            const selectors = ['.brand', '.primary-nav', '.filters', '.label-search', '.label-chip', '.clear-label', '.search-submit', '.header-account', '.label-search input']
+            const text = document.createRange()
+            text.selectNodeContents(element)
+            return { clipped: text.getBoundingClientRect().width > element.getBoundingClientRect().width + 0.1, boxes: selectors.map(selector => {
+              const box = document.querySelector(selector).getBoundingClientRect()
+              return { selector, left: box.left, right: box.right, top: box.top, bottom: box.bottom }
+            }) }
+          })
+          if (label === 'ABC') assert.equal(layout.clipped, false, `Short label clipped at ${width}px / ${scale * 100}% scale`)
+          const chip = layout.boxes.find(box => box.selector === '.label-chip')
+          const draft = layout.boxes.find(box => box.selector === '.label-search input')
+          const search = layout.boxes.find(box => box.selector === '.search-submit')
+          const separated = (first, second) => first.right + 4 <= second.left || first.bottom + 4 <= second.top
+          assert.ok(separated(chip, draft) && separated(draft, search) && separated(chip, search), `Search controls overlap at ${width}px`)
+          if (label === 'ABC') assert.ok(chip.right - chip.left >= 140 * scale - 0.5, `Chip is not twice as wide at ${width}px`)
+          assert.ok(layout.boxes.every(box => box.left >= 0 && box.right <= width), `Header out of bounds at ${width}px: ${JSON.stringify(layout)}`)
+          if (scale === 1 && width === 390 && label === 'ABC') {
+            await page.getByRole('button', { name: 'Look back period', exact: true }).click()
+            await capture(`${design}-mobile-label`)
+            await page.keyboard.press('Escape')
+          }
+        }
+      }
+      await page.evaluate(() => { document.body.style.zoom = '' })
+    }
+    await page.getByRole('button', { name: 'Clear label filter', exact: true }).click()
+    await page.getByRole('button', { name: 'Look back period', exact: true }).click()
+    await page.getByRole('menuitemradio', { name: '3 months', exact: true }).click()
+    for (const scale of [1, 1.25, 1.5]) {
+      await page.evaluate(value => { document.body.style.zoom = String(value) }, scale)
+      for (const width of [320, 390, 780, 1440]) {
+        await page.setViewportSize({ width, height: 844 })
+        const label = await page.locator('.lookback-trigger > span:last-of-type').evaluate(element => {
+          const range = document.createRange()
+          range.selectNodeContents(element)
+          return { text: element.textContent, lines: range.getClientRects().length, clipped: element.scrollWidth > element.clientWidth }
+        })
+        assert.equal(label.text, '3 months')
+        assert.equal(label.lines, 1, `Lookback wraps at ${width}px / ${scale * 100}% scale`)
+        assert.equal(label.clipped, false)
+      }
+    }
+    await page.evaluate(() => { document.body.style.zoom = '' })
+    await page.getByRole('button', { name: 'Look back period', exact: true }).click()
+    await page.getByRole('menuitemradio', { name: '5 days', exact: true }).click()
     await page.setViewportSize({ width: 1440, height: 1080 })
   }
   // Raw historical notes also grow naturally instead of adding nested scroll areas.
@@ -141,7 +220,7 @@ try {
   assert.equal(await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('katavti.notes.v1')))[0].content), longDraft)
   await page.locator('.note.active .cm-content').fill(notes[0])
   await page.waitForTimeout(2300)
-  await page.getByRole('combobox', { name: 'Color theme', exact: true }).selectOption('system')
+  await page.getByRole('button', { name: 'System theme', exact: true }).click()
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.waitForFunction(() => document.querySelector('#app').dataset.theme === 'dark')
   await page.emulateMedia({ colorScheme: 'light' })
@@ -150,7 +229,7 @@ try {
   assert.equal(await page.locator('.workspace-heading').count(), 0)
   assert.deepEqual(errors, [])
   await writeFile(new URL('mock-notes.json', output), await page.evaluate(() => localStorage.getItem('katavti.notes.v1')))
-  const views = ['history', 'history-bottom', 'daily-raw', 'daily-preview', 'label-search', 'empty-search', 'login', 'mobile', 'mobile-history']
+  const views = ['history', 'history-bottom', 'lookback', 'daily-raw', 'daily-preview', 'label-search', 'empty-search', 'login', 'mobile', 'mobile-history', 'mobile-label']
   const gallery = `<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Katavti · Design review</title>
 <style>body{background:#f3f4ef;color:#30372e;font:15px/1.6 system-ui;margin:40px}h1{font-size:36px;letter-spacing:-.04em}nav{display:flex;gap:16px;flex-wrap:wrap;margin:24px 0}a{color:#476642}section{margin:40px 0}h2{font-weight:500}div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}figure{margin:0}img{width:100%;border:1px solid #d4dace;border-radius:8px;background:white}figcaption{margin-bottom:10px;font-size:13px}@media(max-width:800px){body{margin:20px}div{grid-template-columns:1fr}}</style>
@@ -159,7 +238,7 @@ try {
 ${views.map(view => `<section id="${view}"><h2>${view.replaceAll('-', ' ')}</h2><div>${['final-light', 'final-dark'].map(design => `<figure><figcaption>${design.toUpperCase()}</figcaption><a href="${design}-${view}.png"><img loading="lazy" src="${design}-${view}.png" alt="${design} — ${view}"></a></figure>`).join('')}</div></section>`).join('')}
 </html>`
   await writeFile(new URL('index.html', output), gallery)
-  console.log('PASS: 12 notes created through the UI, saves and themes survive reload, expanded All Notes, fixed-height Daily with page access, label/empty results, mobile overflow, and 18 light/dark screenshots. No page errors. Gallery: .ui-review/index.html')
+  console.log('PASS: 12 notes created through the UI, saves and themes survive reload, expanded All Notes, fixed-height Daily with page access, label/empty results, mobile overflow, and 22 light/dark screenshots. No page errors. Gallery: .ui-review/index.html')
 } finally {
   await browser.close()
 }
