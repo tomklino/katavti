@@ -28,5 +28,32 @@ describe('DailyView additional notes', () => {
 
     expect(wrapper.findAll('article')).toHaveLength(5)
     await vi.waitFor(() => expect(wrapper.find('[data-id="note-5"]').attributes('data-active')).toBe('true'))
+    wrapper.unmount()
+  })
+
+  it('pages large collections without hiding the active editor or losing access to notes', async () => {
+    let resize: ResizeObserverCallback = () => undefined
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) { resize = callback }
+      observe() {}
+      disconnect() {}
+    })
+    try {
+      const api = notesApi()
+      const store = createStore(api as any, api as any)
+      const wrapper = mount(DailyView, { global: { plugins: [store], stubs: { NoteCard: { props: ['id', 'active'], template: '<article :data-id="id" :data-active="active" />' } } } })
+      await vi.waitFor(() => expect(store.state.dailyIds).toHaveLength(4))
+      resize([{ contentRect: { height: 310 } } as ResizeObserverEntry], {} as ResizeObserver)
+      await wrapper.vm.$nextTick()
+      expect(wrapper.findAll('article')).toHaveLength(3)
+      await wrapper.get('[aria-label="Next daily notes"]').trigger('click')
+      expect(wrapper.get('[data-id="note-4"]').attributes('data-active')).toBe('true')
+      await wrapper.get('[aria-label="Add note"]').trigger('click')
+      await vi.waitFor(() => expect(wrapper.get('[data-id="note-5"]').attributes('data-active')).toBe('true'))
+      await wrapper.get('[aria-label="Previous daily notes"]').trigger('click')
+      expect(wrapper.findAll('article')).toHaveLength(3)
+      expect(wrapper.get('[data-id="note-3"]').attributes('data-active')).toBe('true')
+      wrapper.unmount()
+    } finally { vi.unstubAllGlobals() }
   })
 })

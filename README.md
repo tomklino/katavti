@@ -64,6 +64,20 @@ KATAVTI_STORAGE_DATA_DIR="$HOME/notes" npm run dev
 
 The committed configuration uses API port 3030 and Vite uses 8080 internally. The client uses relative `/api/v1beta` URLs by default. Kubernetes Ingress routes those URLs to the server and all other URLs to the client, so browsers see both on the single `http://katavti.local` origin. This follows farmers-market's path-based routing while using the current `networking.k8s.io/v1` Ingress API.
 
+### Compact notes workspace
+
+The final interface combines Ink’s compact top navigation with Studio’s light palette. The **Color theme** control offers **System**, **Light**, and **Dark**; dark mode retains Ink’s original palette. It follows the OS by default and remembers explicit choices in both development and production. Theme changes do not remount editors or interrupt pending saves. The prototype design panel has been retired.
+
+**Daily** fills the remaining viewport height, with one expanded writing area and compact note headers. The notes collection never scrolls; long text scrolls inside the active editor or preview. When there are too many notes to keep a usable editor, previous/next controls page the headers. **All Notes** expands every note to its natural height in a single scrolling reading feed. Exact-label search, lookback, Markdown/raw mode, copy, and autosave remain available.
+
+To reproduce the headless visual review against a running dev server (Chrome must be installed):
+
+```sh
+KATAVTI_UI_URL=http://localhost:8082 node scripts/ui-review.mjs
+```
+
+The script uses a fresh, anonymous browser context, creates 12 mock notes through the editor, verifies persistence, theme preferences, expanded reading, non-scrolling Daily, header pagination, and label filtering, and captures nine views per theme (including mobile). It does not touch your real browser notes or API notes. Set `CHROME_PATH` if Chrome is not in its standard location. The generated `final-light-*.png` and `final-dark-*.png` screenshots, mock-note export, and comparison gallery are in the Git-ignored `.ui-review/` directory; open `.ui-review/index.html` to compare them. Earlier prototype screenshots remain alongside them.
+
 ### Local Kubernetes with K3s
 
 K3s is a small Kubernetes distribution and includes the Traefik Ingress controller. On Linux, install it and create a user-readable kubectl configuration:

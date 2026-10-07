@@ -12,7 +12,7 @@ export default defineConfig({
     port: 8080,
     allowedHosts: ['katavti.local'],
     watch: { usePolling: true },
-    hmr: { host: 'katavti.local', clientPort: 80 },
+    // Let Vite derive the HMR host from the browser origin (localhost or Ingress).
     proxy: { '/api': { target: 'http://localhost:3030' } },
   },
 })

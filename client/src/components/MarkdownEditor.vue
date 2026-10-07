@@ -12,7 +12,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 
 export default defineComponent({
-  props: { modelValue: { type: String, required: true }, readonly: Boolean },
+  props: { modelValue: { type: String, required: true }, readonly: Boolean, ariaLabel: { type: String, default: 'Markdown note' } },
   emits: ['update:modelValue'],
   data: () => ({ view: undefined as EditorView | undefined }),
   mounted() {
@@ -22,14 +22,15 @@ export default defineComponent({
         doc: this.modelValue,
         extensions: [
           markdown(), history(), keymap.of([...defaultKeymap, ...historyKeymap]),
+          EditorView.contentAttributes.of({ 'aria-label': this.ariaLabel }),
           syntaxHighlighting(HighlightStyle.define([
-            { tag: tags.heading, color: '#0369a1', fontWeight: '700' },
-            { tag: [tags.link, tags.url], color: '#2563eb', textDecoration: 'underline' },
-            { tag: tags.emphasis, color: '#7c3aed', fontStyle: 'italic' },
-            { tag: tags.strong, color: '#7c2d12', fontWeight: '700' },
-            { tag: tags.monospace, color: '#9f1239', backgroundColor: '#cbd5e1' },
-            { tag: tags.meta, color: '#64748b' },
-            { tag: tags.list, color: '#047857', fontWeight: '600' },
+            { tag: tags.heading, color: 'var(--syntax-heading, #0369a1)', fontWeight: '700' },
+            { tag: [tags.link, tags.url], color: 'var(--syntax-link, #2563eb)', textDecoration: 'underline' },
+            { tag: tags.emphasis, color: 'var(--syntax-emphasis, #7c3aed)', fontStyle: 'italic' },
+            { tag: tags.strong, color: 'var(--syntax-strong, #7c2d12)', fontWeight: '700' },
+            { tag: tags.monospace, color: 'var(--syntax-code, #9f1239)', backgroundColor: 'var(--collapsed, #cbd5e1)' },
+            { tag: tags.meta, color: 'var(--muted, #64748b)' },
+            { tag: tags.list, color: 'var(--accent, #047857)', fontWeight: '600' },
           ])),
           readonlyCompartment.of(EditorState.readOnly.of(this.readonly)),
           EditorView.lineWrapping,

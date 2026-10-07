@@ -12,6 +12,7 @@ config/
 !server/src/config/*.ts
 secrets/
 coverage/
+.ui-review/
 .DS_Store
 
 .venv-ansible/

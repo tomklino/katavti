@@ -1,17 +1,20 @@
 <template>
-  <article class="note" :class="{ active }" @click="$emit('activate')">
-    <header>
-      <time v-if="active">{{ formattedDate }}</time>
-      <strong>{{ title }}</strong>
+  <article class="note" :class="{ active, browsing }" @click="$emit('activate')">
+    <header :tabindex="active ? -1 : 0" :role="active ? undefined : 'button'" :aria-expanded="active" @keydown.enter.self.prevent="$emit('activate')" @keydown.space.self.prevent="$emit('activate')">
+      <span class="note-number" aria-hidden="true">{{ (index + 1).toString().padStart(2, '0') }}</span>
+      <div class="note-heading"><strong>{{ title }}</strong><time v-if="active">{{ formattedDate }}<span> / {{ editable ? 'Daily note' : 'From your notebook' }}</span></time></div>
+      <span v-if="label" class="note-label">{{ label }}</span>
       <div v-if="active" class="actions">
-        <label><input v-model="raw" type="checkbox"> Raw</label>
-        <button @click.stop="copy">{{ copyLabel }}</button>
+        <label class="raw-toggle"><input v-model="raw" type="checkbox"><span>{{ raw ? 'Raw' : 'Preview' }}</span></label>
+        <button type="button" @click.stop="copy"><span aria-hidden="true">▢</span> {{ copyLabel }}</button>
       </div>
+      <span v-else class="note-chevron" aria-hidden="true">↗</span>
     </header>
     <div class="note-body" :aria-hidden="!active">
-      <MarkdownEditor v-if="raw" ref="editor" :class="{ unsaved }" :model-value="note.content" :readonly="!editable" @update:model-value="edit" />
+      <MarkdownEditor v-if="raw" ref="editor" :class="{ unsaved }" :model-value="note.content" :readonly="!editable" :aria-label="`Edit ${title}`" @update:model-value="edit" />
       <div v-else class="rendered" v-html="rendered" />
     </div>
+    <footer v-if="active" class="note-footer"><span>{{ wordCount }} words <span class="footer-separator">/</span> Markdown</span><span class="save-state" :class="{ pending: unsaved }" role="status"><span />{{ unsaved ? 'Saving changes…' : editable ? 'All changes saved' : 'Read-only · open Daily to write' }}</span></footer>
   </article>
 </template>
 
@@ -22,17 +25,21 @@ import { markdown } from '@/markdown'
 
 export default defineComponent({
   components: { MarkdownEditor },
-  props: { id: { type: String, required: true }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean },
+  props: { id: { type: String, required: true }, index: { type: Number, default: 0 }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean, browsing: Boolean },
+  emits: ['activate'],
   data() { return { raw: this.startRaw, copyLabel: 'Copy', timer: 0, pendingContent: null as string | null } },
   computed: {
     note(): any { return this.$store.state.notes[this.id] || { content: '', ISODateString: new Date().toISOString() } },
     title(): string { return this.note.content.split('\n').find((line: string) => line.trim())?.replace(/^#+\s*/, '') || 'Untitled note' },
-    formattedDate(): string { return new Date(this.note.ISODateString).toLocaleDateString() },
+    formattedDate(): string { return new Date(this.note.ISODateString).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) },
+    label(): string { return this.note.content.match(/^Label:\s*(.+)$/m)?.[1] || this.note.content.match(/^Bug:\s*(.+)$/m)?.[1] || '' },
+    wordCount(): number { return this.note.content.trim() ? this.note.content.trim().split(/\s+/).length : 0 },
     rendered(): string { return markdown.render(this.note.content) },
     unsaved(): boolean { return Boolean(this.$store.state.unsavedNotes[this.id]) },
   },
   watch: {
     active(value: boolean) { if (value) this.focusEditor() },
+    raw(value: boolean) { if (value && this.active) this.focusEditor() },
   },
   mounted() { window.addEventListener('pagehide', this.flushPendingEdit) },
   beforeUnmount() {
@@ -55,31 +62,59 @@ export default defineComponent({
       this.pendingContent = null
       this.$store.dispatch('saveNote', { id: this.id, content }).catch(() => undefined)
     },
-    async copy() { await navigator.clipboard.writeText(this.note.content); this.copyLabel = 'Copied!'; window.setTimeout(() => { this.copyLabel = 'Copy' }, 1500) },
+    async copy() {
+      try { await navigator.clipboard.writeText(this.note.content); this.copyLabel = 'Copied!' }
+      catch { this.copyLabel = 'Copy failed' }
+      window.setTimeout(() => { this.copyLabel = 'Copy' }, 1500)
+    },
   },
 })
 </script>
 
 <style scoped>
 .note {
-  background: #e8edf0; border-radius: 10px; box-shadow: 0 2px 8px #0002;
-  box-sizing: border-box; cursor: pointer; flex: 0 0 3.25rem; max-height: 3.25rem;
-  min-height: 3.25rem; overflow: hidden; padding: 1rem;
-  transition: flex-grow 180ms ease, max-height 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+  background: var(--collapsed); border: 1px solid var(--line); border-radius: var(--radius);
+  box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; flex: 0 0 28px;
+  min-height: 28px; overflow: hidden;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
-.note.active { background: white; cursor: default; flex: 1 1 auto; max-height: 100%; }
-header { align-items: center; display: grid; gap: 1rem; grid-template-columns: auto 1fr auto; }
-.note:not(.active) header { display: block; }
-.note:not(.active) strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.note.active header { border-bottom: 1px solid #ddd; padding-bottom: .5rem; }
-time { color: #64748b; font-size: .85rem; }
-.actions { white-space: nowrap; }
-.note-body { height: calc(100% - 2.5rem); opacity: 0; overflow: auto; pointer-events: none; transition: opacity 120ms ease; visibility: hidden; }
-.note.active .note-body { opacity: 1; pointer-events: auto; transition-delay: 80ms; visibility: visible; }
+.note:hover { border-color: var(--muted); }
+.note.active { background: var(--surface); border-color: var(--active-line); box-shadow: var(--note-shadow); cursor: default; flex: 1 1 0; min-height: 0; }
+.note.browsing { flex: 0 0 auto; min-height: 0; overflow: visible; }
+header { align-items: center; display: flex; flex-shrink: 0; gap: 12px; min-height: 26px; padding: 0 14px; }
+.note.active header { border-bottom: 1px solid var(--line); min-height: 48px; }
+.note-heading { flex: 1; min-width: 0; }
+strong { display: block; font-size: 13px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note.active strong { font-size: 13px; }
+.note-number { color: var(--muted); font: 10px/1.5 ui-monospace, monospace; }
+.note.active .note-number { color: var(--accent); }
+time { color: var(--muted); display: block; font-size: 10px; margin-top: 5px; }
+time span { opacity: .8; }
+.note-label { background: var(--tag-bg); border-radius: 4px; color: var(--tag-text); font-size: 10px; padding: 3px 8px; }
+.note-chevron { color: var(--muted); font-size: 15px; margin-left: 8px; }
+.actions { align-items: center; display: flex; gap: 12px; white-space: nowrap; }
+.actions button { align-items: center; background: var(--surface); border-color: var(--line); display: flex; font-size: 11px; gap: 5px; padding: 7px 10px; }
+.raw-toggle { align-items: center; color: var(--muted); cursor: pointer; display: flex; font-size: 11px; gap: 6px; }
+.raw-toggle input { accent-color: var(--accent); height: 12px; margin: 0; width: 12px; }
+.note-body { display: none; min-height: 0; overflow: auto; }
+.note.active .note-body { display: block; flex: 1; }
+.note.browsing .note-body { flex: 0 0 auto; overflow: visible; }
 .markdown-editor { border: 2px solid transparent; box-sizing: border-box; }
 .markdown-editor.unsaved { border-style: dashed; border-color: #d97706; }
-button { margin-left: .75rem; }
-.rendered { line-height: 1.55; padding: .25rem .25rem 1rem; text-align: left; }
+.rendered { box-sizing: border-box; font-family: var(--reading-font); font-size: 14px; line-height: 1.65; margin: 0; max-width: 900px; padding: 0 20px 16px; text-align: left; }
+.note-footer { align-items: center; border-top: 1px solid var(--line); color: var(--muted); display: flex; flex-shrink: 0; font-size: 9px; justify-content: space-between; padding: 6px 14px; }
+.footer-separator { margin: 0 7px; opacity: .6; }
+.save-state { align-items: center; display: flex; gap: 5px; }
+.save-state > span { background: var(--accent); border-radius: 50%; height: 4px; width: 4px; }
+.save-state.pending > span { background: #d97706; }
+@media (max-width: 600px) {
+  header { gap: 8px; padding: 0 10px; }
+  .note.active header { min-height: 48px; }
+  .note.active .note-label, time span { display: none; }
+  .actions { gap: 6px; }.actions button { font-size: 10px; padding: 5px 7px; }
+  .raw-toggle { font-size: 10px; }.rendered { padding: 0 12px 12px; }
+  .note-footer { font-size: 8px; padding: 6px 10px; }
+}
 .rendered :deep(h1), .rendered :deep(h2), .rendered :deep(h3), .rendered :deep(h4), .rendered :deep(h5), .rendered :deep(h6) { line-height: 1.25; margin: 1em 0 .45em; }
 .rendered :deep(ul), .rendered :deep(ol) { padding-left: 1.75rem; }
 .rendered :deep(li) { margin: .25rem 0; }

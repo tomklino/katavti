@@ -55,6 +55,24 @@ describe('NoteCard focus states', () => {
     expect(wrapper.emitted('activate')).toHaveLength(1)
   })
 
+  it('activates a collapsed note with the keyboard', async () => {
+    const wrapper = mountCard(false)
+    expect(wrapper.get('header').attributes('tabindex')).toBe('0')
+    expect(wrapper.get('header').attributes('aria-expanded')).toBe('false')
+    await wrapper.get('header').trigger('keydown', { key: 'Enter' })
+    await wrapper.get('header').trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('activate')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('shows label and accurate word count without modifying the Markdown', () => {
+    const wrapper = mountCard(true, '# A thought\n\nLabel: design\n\nKeep it simple.')
+    expect(wrapper.get('.note-label').text()).toBe('design')
+    expect(wrapper.get('.note-footer').text()).toContain('8 words')
+    expect(wrapper.vm.$store.state.notes['note-1'].content).toContain('Label: design')
+    wrapper.unmount()
+  })
+
   it('focuses its editor immediately when it becomes active', async () => {
     const wrapper = mountCard(false)
     const editor = (wrapper.vm.$refs.editor as any)
