@@ -39,7 +39,7 @@ spec:
       volumes:
         - name: source
           hostPath:
-            path: /home/tom/workspace/katavti
+            path: /home/tom/workspace/tomklino/katavti
             type: Directory
 ---
 apiVersion: apps/v1
@@ -88,7 +88,7 @@ spec:
       volumes:
         - name: source
           hostPath:
-            path: /home/tom/workspace/katavti
+            path: /home/tom/workspace/tomklino/katavti
             type: Directory
         - name: data
           emptyDir: {}

@@ -127,7 +127,7 @@ kubectl rollout status deployment/katavti-client --timeout=120s
 kubectl rollout status deployment/katavti-server --timeout=120s
 ```
 
-`dev-deployments.yaml` mounts this checkout (`/home/tom/workspace/katavti`) into both containers. The Vue 3 client runs `npm run dev` with Vite HMR and polling-based file watching; the server runs `tsx watch`. Neither process serves the prebuilt application, and source edits are picked up without restarting a container. Services and Ingress stay unchanged, so development and production use the same public paths. If the checkout moves, update both `hostPath.path` values in that file.
+`dev-deployments.yaml` mounts this checkout (`/home/tom/workspace/tomklino/katavti`) into both containers. The Vue 3 client runs `npm run dev` with Vite HMR and polling-based file watching; the server runs `tsx watch`. Neither process serves the prebuilt application, and source edits are picked up without restarting a container. Services and Ingress stay unchanged, so development and production use the same public paths. If the checkout moves, update both `hostPath.path` values in that file.
 
 For plain local development, run the API and Vite separately; Vite proxies `/api` to port 3030:
 

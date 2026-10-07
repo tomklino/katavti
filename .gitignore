@@ -12,6 +12,7 @@ config/
 !server/src/config/*.ts
 secrets/
 coverage/
+/data/
 .ui-review/
 .DS_Store
 
