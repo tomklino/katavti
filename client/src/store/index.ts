@@ -3,9 +3,14 @@ import { authApi, type User } from '@/api/auth'
 import { backUpLocalNotes, createLocalNotesApi, createSyncedNotesApi } from '@/api/local-notes'
 import { notesApi, type ListQuery, type Note, type NotesApi } from '@/api/notes'
 
+function browserDay(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 export type State = {
   days: number; bug: string; noteIds: string[]; dailyIds: string[]; notes: Record<string, Note>
   unsavedNotes: Record<string, boolean>; saveErrors: Record<string, string | null>
+  dailyDate: string; previousDayWarning: boolean
   loading: boolean; error: string | null; user: User | null; storageWarning: boolean; backupStatus: string
 }
 
@@ -22,12 +27,15 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
     : 0
   const saveQueues = new Map<string, SaveQueue>()
   return createVuexStore<State>({
-    state: { days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, saveErrors: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
+    state: { dailyDate: '', previousDayWarning: false, days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, saveErrors: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
     mutations: {
       setFilter(state, query: ListQuery) { if (query.days !== undefined) state.days = query.days; state.bug = query.bug || '' },
       setIds(state, ids: string[]) { state.noteIds = ids }, setDailyIds(state, ids: string[]) { state.dailyIds = ids },
       setNote(state, { id, note }: { id: string; note: Note }) { state.notes[id] = note },
+      setDailyDate(state, date: string) { state.dailyDate = date; state.previousDayWarning = false },
+      setPreviousDayWarning(state, value: boolean) { state.previousDayWarning = value },
       setNoteContent(state, { id, content }: { id: string; content: string }) {
+        if (state.dailyDate && state.dailyDate < browserDay() && state.dailyIds.includes(id)) state.previousDayWarning = true
         const previous = state.notes[id]
         state.notes[id] = { ...previous, content, ISODateString: previous?.ISODateString || new Date().toISOString(), tags: previous?.tags || [] }
       },
@@ -73,9 +81,10 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
         finally { commit('setLoading', false) }
       },
       async loadDaily({ state, commit }, count: number) {
-        const api = selectedApi(state); const date = new Date().toISOString().slice(0, 10)
-        const ids = await api.createDaily(count, date); commit('setDailyIds', ids)
+        const api = selectedApi(state); const date = browserDay()
+        const ids = await api.createDaily(count, date)
         await Promise.all(ids.map(async id => commit('setNote', { id, note: await api.read(id) })))
+        commit('setDailyIds', ids); commit('setDailyDate', date)
       },
       async reloadNote({ state, commit }, id: string) {
         try {

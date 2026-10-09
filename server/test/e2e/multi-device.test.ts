@@ -136,6 +136,60 @@ async function editStaleLaptop(email: string) {
   return { laptop, mobile, url, response, mobileContent, laptopContent }
 }
 
+describe('client-clock daily notes', () => {
+  it.each([
+    { timezoneId: 'America/Los_Angeles', before: '2001-01-02T07:59:00Z', after: '2001-01-02T08:01:00Z' },
+    { timezoneId: 'Asia/Tokyo', before: '2001-01-01T14:59:00Z', after: '2001-01-01T15:01:00Z' },
+  ])('creates the browser-local day, never the server day, across midnight in $timezoneId', async ({ timezoneId, before, after }) => {
+    // Only the browser clock is mocked. The HTTP server retains its real clock,
+    // and both dates are deliberately far from the server's current date.
+    const serverDay = new Date().toISOString().slice(0, 10)
+    expect(['2001-01-01', '2001-01-02']).not.toContain(serverDay)
+    const context = await browser.newContext({ timezoneId })
+    contexts.push(context)
+    const page = await context.newPage()
+    await page.clock.setFixedTime(new Date(before))
+    await page.goto(origin)
+    await fakeLogin(page, `client-clock-${timezoneId.split('/')[1].toLowerCase()}@example.com`)
+
+    async function assertCreatedDay(response: Awaited<ReturnType<Page['waitForResponse']>>, date: string) {
+      expect(response.status()).toBe(201)
+      expect(new URL(response.url()).searchParams.get('date')).toBe(date)
+      const ids: string[] = await response.json()
+      expect(ids).toHaveLength(4)
+      for (const id of ids) {
+        // These are actual API results, not localStorage or intercepted requests.
+        expect(decodeURIComponent(id)).toContain(`/workspaces-${date}/`)
+        expect(decodeURIComponent(id)).not.toContain(`/workspaces-${serverDay}/`)
+        const persisted = await page.request.get(`${origin}/api/v1beta/notes/${id}`)
+        expect(persisted.status()).toBe(200)
+        expect((await persisted.json()).ISODateString).toBe(`${date}T00:00:00.000Z`)
+      }
+      return ids
+    }
+    const creation = () => page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/v1beta/notes/daily' && response.request().method() === 'PUT')
+
+    const firstCreation = creation()
+    await openDaily(page)
+    const oldIds = await assertCreatedDay(await firstCreation, '2001-01-01')
+    const oldNoteUrl = await editAuthenticated(page, 'Draft from the browser-local January 1')
+    await page.clock.setFixedTime(new Date(after))
+    expect(await page.locator('.previous-day-warning').count()).toBe(0)
+    await editor(page).fill('Late edit to January 1')
+    await page.locator('.previous-day-warning').waitFor()
+
+    const nextCreation = creation()
+    await page.getByRole('link', { name: 'start a new day', exact: true }).click()
+    const newIds = await assertCreatedDay(await nextCreation, '2001-01-02')
+    expect(newIds.some(id => oldIds.includes(id))).toBe(false)
+    await page.locator('.previous-day-warning').waitFor({ state: 'detached' })
+    expect((await editor(page).innerText()).trim()).toBe('')
+    // Switching days must also flush the old editor's pending save.
+    await expect.poll(() => readNote(page, oldNoteUrl)).toBe('Late edit to January 1')
+  }, 45_000)
+})
+
 describe('multi-device conflict safety', () => {
   it('rejects a stale laptop save with a conflict error and preserves the mobile note', async () => {
     const { mobile, url, response, mobileContent } = await editStaleLaptop('stale-server@example.com')

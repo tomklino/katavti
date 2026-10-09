@@ -5,6 +5,15 @@ import MessageBar from '@/components/MessageBar.vue'
 afterEach(() => vi.useRealTimers())
 
 describe('MessageBar', () => {
+  it('can keep an actionable warning visible without a countdown or automatic dismissal', () => {
+    vi.useFakeTimers()
+    const wrapper = mount(MessageBar, { props: { variant: 'warning', persistent: true } })
+    vi.advanceTimersByTime(60_000)
+    expect(wrapper.emitted('dismiss')).toBeUndefined()
+    expect(wrapper.find('.countdown').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('has a dismiss control and a 30-second countdown indicator', () => {
     const wrapper = mount(MessageBar, { slots: { default: 'Saved' } })
     expect(wrapper.find('[aria-label="Dismiss message"]').exists()).toBe(true)

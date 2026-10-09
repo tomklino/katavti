@@ -33,6 +33,7 @@ export default defineComponent({
     pageStart(): number { return Math.floor(this.active / this.maxVisible) * this.maxVisible },
     visibleDailyIds(): string[] { return this.$store.state.dailyIds.slice(this.pageStart, this.pageStart + this.maxVisible) },
   },
+  watch: { '$store.state.dailyDate'() { this.active = 0 } },
   created() { this.loadDaily() },
   mounted() {
     if (typeof ResizeObserver === 'undefined') return

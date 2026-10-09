@@ -1,5 +1,9 @@
 <template>
   <div id="app" :data-theme="resolvedTheme">
+    <MessageBar v-if="$store.state.previousDayWarning" class="previous-day-warning" variant="warning" persistent @dismiss="$store.commit('setPreviousDayWarning', false)">
+      You're editing notes of a previous day. <a href="/daily" :aria-disabled="startingDay" @click.prevent="startNewDay">start a new day</a>
+      <span v-if="dayError" role="alert"> {{ dayError }}</span>
+    </MessageBar>
     <MessageBar v-if="$store.state.storageWarning" variant="warning" @dismiss="$store.dispatch('dismissStorageWarning')">
       These notes are stored only in this browser. Log in to back them up to Katavti.
     </MessageBar>
@@ -42,7 +46,7 @@ import { initialTheme, rememberTheme, resolveTheme, type Theme } from '@/theme'
 export default defineComponent({
   components: { LoginPanel, MessageBar, LookbackMenu, ThemeToggle },
   created() { this.$store.dispatch('initializeAuth').catch(() => undefined) },
-  data() { return { days: this.$store.state.days, bug: '', theme: initialTheme(), systemDark: false, colorQuery: null as MediaQueryList | null } },
+  data() { return { startingDay: false, dayError: '', days: this.$store.state.days, bug: '', theme: initialTheme(), systemDark: false, colorQuery: null as MediaQueryList | null } },
   computed: {
     resolvedTheme(): 'light' | 'dark' { return resolveTheme(this.theme, this.systemDark) },
     labelActive(): boolean { return Boolean(this.$store.state.bug) },
@@ -55,6 +59,16 @@ export default defineComponent({
   beforeUnmount() { this.colorQuery?.removeEventListener('change', this.systemThemeChanged) },
   watch: { theme(value: Theme) { rememberTheme(value) }, '$store.state.days'(value: number) { this.days = value } },
   methods: {
+    async startNewDay() {
+      if (this.startingDay) return
+      this.startingDay = true
+      this.dayError = ''
+      try {
+        await this.$store.dispatch('loadDaily', 4)
+        await this.$router.push('/daily')
+      } catch { this.dayError = 'Unable to start a new day. Please try again.' }
+      finally { this.startingDay = false }
+    },
     systemThemeChanged(event: MediaQueryListEvent) { this.systemDark = event.matches },
     searchDays(days: number) {
       this.days = days
@@ -73,6 +87,8 @@ export default defineComponent({
 <style>
 html, body, #app { height: 100%; }
 #katavti-root { height: 100%; }
+.previous-day-warning a { color: inherit; text-decoration: underline; font-weight: 600; }
+.previous-day-warning a[aria-disabled="true"] { cursor: wait; opacity: .6; }
 body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
 #app { display: flex; flex-direction: column; min-height: 0; }
 #app > main { box-sizing: border-box; flex: 1 1 auto; margin: 0 auto; min-height: 0; width: var(--workspace-width); }

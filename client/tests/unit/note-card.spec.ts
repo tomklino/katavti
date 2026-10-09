@@ -23,6 +23,14 @@ function mountCard(active: boolean, content = '# Compact title\nFull note body',
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
 describe('NoteCard focus states', () => {
+  it('displays the stored calendar day without shifting UTC-midnight metadata to yesterday', () => {
+    const format = vi.spyOn(Date.prototype, 'toLocaleDateString')
+    const wrapper = mountCard(true)
+    expect(format).toHaveBeenCalledWith('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+    expect(wrapper.get('time').text()).toContain('Sep 25, 2026')
+    wrapper.unmount()
+  })
+
   it('shows only the title while compacted', () => {
     const wrapper = mountCard(false)
     expect(wrapper.classes()).not.toContain('active')

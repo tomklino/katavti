@@ -32,7 +32,7 @@ export default defineComponent({
   computed: {
     note(): any { return this.$store.state.notes[this.id] || { content: '', ISODateString: new Date().toISOString() } },
     title(): string { return this.note.content.split('\n').find((line: string) => line.trim())?.replace(/^#+\s*/, '') || 'Untitled note' },
-    formattedDate(): string { return new Date(this.note.ISODateString).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) },
+    formattedDate(): string { return new Date(this.note.ISODateString).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) },
     label(): string { return this.note.content.match(/^Label:\s*(.+)$/m)?.[1] || this.note.content.match(/^Bug:\s*(.+)$/m)?.[1] || '' },
     wordCount(): number { return this.note.content.trim() ? this.note.content.trim().split(/\s+/).length : 0 },
     rendered(): string { return markdown.render(this.note.content) },
