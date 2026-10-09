@@ -149,6 +149,25 @@ export KATAVTI_AUTH_GOOGLE_CLIENT_ID='your-client-id.apps.googleusercontent.com'
 export VITE_GOOGLE_CLIENT_ID="$KATAVTI_AUTH_GOOGLE_CLIENT_ID"
 ```
 
+### Development fake login and multi-device reproductions
+
+In the Vite development login panel, enter an email and choose **Fake log in (dev only)**. It skips email/Google verification but creates a normal HttpOnly session and runs the same local-note backup as real login. Use the same disposable email in two isolated browser profiles/contexts to simulate devices. This can overwrite that account's notes: never use a real account for these tests.
+
+`POST /api/v1beta/auth/fake-login` accepts `{ "email": "tester@example.com" }`. The endpoint is registered **only** when the server's validated `environmentType` is `dev`; production returns 404 regardless of `NODE_ENV`. The service also rejects calls unless explicitly configured for development. The button is absent from production client builds.
+
+Run the Playwright browser E2E reproductions with installed server/client dependencies and Chromium:
+
+```sh
+npx playwright install chromium
+npx vitest run server/test/e2e/multi-device.test.ts
+# Alternatively use installed Google Chrome:
+PLAYWRIGHT_CHANNEL=chrome npx vitest run server/test/e2e/multi-device.test.ts
+```
+
+These tests start their own ephemeral API and Vite servers with temporary notes, sessions, and Vite cache. They use real editors and independent browser cookies/localStorage, not a running K3s instance or your real notes. Browser date mocking simulates anonymous editing today, a week ago, and three weeks ago. They also verify the production fake-login endpoint is unavailable.
+
+The tests verify that stale saves are rejected without overwriting another device's changes, the client keeps the unsaved draft and displays a conflict warning, and anonymous backups receive collision-free IDs without overwriting existing account notes or erasing content with empty local slots. Copy a conflicting draft before clicking **reloading the latest version** to fetch just that note without reloading the page.
+
 Google's OAuth client must list the application origin (for example `http://katavti.local`) as an authorized JavaScript origin. Production session cookies are Secure and HttpOnly.
 
 ## Test and build

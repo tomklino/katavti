@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import NoteCard from '@/components/NoteCard.vue'
 import { createStore } from '@/store'
@@ -8,6 +8,7 @@ const api = {
   read: async () => ({ content: '', ISODateString: '', tags: [] as Array<[string, string]> }),
   update: async () => '',
   createDaily: async () => [],
+  importNote: async () => ({ id: '', note: { content: '', ISODateString: '', tags: [] as Array<[string, string]> } }),
 }
 
 function mountCard(active: boolean, content = '# Compact title\nFull note body', startRaw = true) {
@@ -118,6 +119,76 @@ describe('NoteCard focus states', () => {
 
     expect(update).toHaveBeenCalledWith('note-1', 'save before closing')
     wrapper.unmount()
+  })
+
+  it('shows an accessible conflict warning instead of claiming the draft is saved', async () => {
+    const wrapper = mountCard(true)
+    wrapper.vm.$store.commit('setNoteUnsaved', { id: 'note-1', value: true })
+    wrapper.vm.$store.commit('setSaveError', { id: 'note-1', error: 'Stale note: changed on another device. Your draft is not saved.' })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[role="alert"]').text()).toContain('changed on another device')
+    expect(wrapper.get('.save-state').text()).toBe('Not saved')
+    expect(wrapper.text()).not.toContain('All changes saved')
+    expect(wrapper.vm.$store.state.notes['note-1'].content).toContain('Full note body')
+    wrapper.unmount()
+  })
+
+  it('reloads only the conflicted note when clicking the warning link and cancels pending draft saves', async () => {
+    vi.useFakeTimers()
+    const conflict = Object.assign(new Error('Stale note conflict: this note changed on another device. Your draft was not saved.'), { status: 409 })
+    const latest = { content: '# Latest from another device', ISODateString: '2026-09-25T00:00:00.000Z', tags: [], revision: 'latest-revision' }
+    const remote = { ...api, read: vi.fn().mockResolvedValue(latest), update: vi.fn().mockRejectedValue(conflict), list: vi.fn() }
+    const local = { ...api, update: vi.fn().mockResolvedValue('note-1') }
+    const store = createStore(remote, local)
+    store.commit('setUser', { email: 'alice@example.com' })
+    store.commit('setNote', { id: 'note-1', note: { ...latest, content: 'Original', revision: 'stale-revision' } })
+    store.commit('setNote', { id: 'note-2', note: { ...latest, content: 'Untouched note' } })
+    const wrapper = mount(NoteCard, { props: { id: 'note-1', editable: true, startRaw: true }, global: { plugins: [store] } })
+    try {
+      await expect(store.dispatch('saveNote', { id: 'note-1', content: 'Conflicting draft' })).rejects.toThrow(conflict.message)
+      ;(wrapper.vm as any).edit('More unsaved typing')
+      await wrapper.vm.$nextTick()
+      const reload = wrapper.find('.save-error button')
+      expect(reload.exists(), 'the conflict warning must provide a clickable note reload control').toBe(true)
+      expect(reload.text()).toBe('reloading the latest version')
+      await reload.trigger('click')
+      await flushPromises()
+
+      expect(remote.read).toHaveBeenCalledExactlyOnceWith('note-1')
+      expect(remote.list).not.toHaveBeenCalled()
+      expect(local.update).toHaveBeenLastCalledWith('note-1', latest.content, latest.revision)
+      expect(store.state.notes['note-1']).toEqual(latest)
+      expect(store.state.notes['note-2'].content).toBe('Untouched note')
+      expect(wrapper.get('.cm-content').text()).toBe(latest.content)
+      expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+      expect(wrapper.get('.save-state').text()).toBe('All changes saved')
+      expect(store.state.unsavedNotes['note-1']).toBe(false)
+      expect(wrapper.emitted('activate')).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(2000)
+      wrapper.unmount()
+      expect(remote.update).toHaveBeenCalledTimes(1)
+    } finally { if (wrapper.exists()) wrapper.unmount() }
+  })
+
+  it('keeps the draft and warning if fetching the latest note fails', async () => {
+    const remote = { ...api, read: vi.fn().mockRejectedValue(new Error('Network unavailable')) }
+    const local = { ...api, read: vi.fn(), update: vi.fn() }
+    const store = createStore(remote, local)
+    store.commit('setUser', { email: 'alice@example.com' })
+    store.commit('setNote', { id: 'note-1', note: { content: 'Keep my draft', ISODateString: '', tags: [], revision: 'stale' } })
+    store.commit('setNoteUnsaved', { id: 'note-1', value: true })
+    store.commit('setSaveError', { id: 'note-1', error: 'Stale note conflict' })
+    const wrapper = mount(NoteCard, { props: { id: 'note-1', editable: true }, global: { plugins: [store] } })
+    try {
+      await wrapper.get('.save-error button').trigger('click')
+      await flushPromises()
+      expect(store.state.notes['note-1'].content).toBe('Keep my draft')
+      expect(store.state.notes['note-1'].revision).toBe('stale')
+      expect(store.state.unsavedNotes['note-1']).toBe(true)
+      expect(wrapper.get('[role="alert"]').text()).toContain('Network unavailable')
+      expect(local.read).not.toHaveBeenCalled()
+      expect(local.update).not.toHaveBeenCalled()
+    } finally { wrapper.unmount() }
   })
 
   it('shows an unsaved editor border until persistence finishes', async () => {

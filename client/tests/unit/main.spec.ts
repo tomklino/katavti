@@ -9,6 +9,7 @@ const api = {
   read: async () => ({ content: '', ISODateString: '', tags: [] as Array<[string, string]> }),
   update: async () => '',
   createDaily: async () => [],
+  importNote: async () => ({ id: '', note: { content: '', ISODateString: '', tags: [] as Array<[string, string]> } }),
 }
 
 describe('Vue 3 bootstrap dependencies', () => {

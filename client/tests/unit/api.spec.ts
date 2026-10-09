@@ -16,6 +16,21 @@ describe('notes API same-origin requests', () => {
     )
   })
 
+  it('sends the read revision as a save precondition and retains HTTP conflict status', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: 'Stale note conflict' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(createNotesApi().update('note', 'Draft', 'r1')).rejects.toMatchObject({ status: 409, message: 'Stale note conflict' })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ content: 'Draft', revision: 'r1' })
+  })
+
+  it('uses a separate import endpoint instead of an overwrite', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'renamed', note: { content: 'Draft', revision: 'r2' } }) })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await createNotesApi().importNote('original', 'Draft')).toMatchObject({ id: 'renamed' })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1beta/notes/import')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ id: 'original', content: 'Draft' })
+  })
+
   it('still permits an explicit API origin for standalone development', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] })
     vi.stubGlobal('fetch', fetchMock)

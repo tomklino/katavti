@@ -4,13 +4,26 @@ import type { AuthService } from '../../services/auth-service.js'
 
 const sessionCookie = 'katavti_session'
 
-export function authRoutes(auth: AuthService, secureCookies: boolean) {
+export function authRoutes(auth: AuthService, environmentType: 'dev' | 'prod') {
   const routes = new Hono()
+  const secureCookies = environmentType === 'prod'
   const setSession = (c: any, session: string) => setCookie(c, sessionCookie, session, {
     httpOnly: true, sameSite: 'Lax', secure: secureCookies, path: '/', maxAge: 60 * 60 * 24 * 30,
   })
 
   routes.get('/session', async c => c.json({ user: await auth.userForSession(getCookie(c, sessionCookie)) ?? null }))
+  // Never register the authentication bypass on a production server.
+  if (environmentType === 'dev') {
+    routes.post('/fake-login', async c => {
+      try {
+        const body = await c.req.json()
+        if (typeof body.email !== 'string') throw new Error('Enter a valid email address')
+        const { session, user } = await auth.fakeLogin(body.email)
+        setSession(c, session)
+        return c.json({ user })
+      } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Unable to sign in' }, 400) }
+    })
+  }
   routes.post('/magic-link', async c => {
     try {
       const body = await c.req.json()

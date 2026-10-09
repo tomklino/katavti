@@ -48,6 +48,7 @@ describe('filesystem notes data', () => {
 
     expect(await data.read('alice@example.com', id)).toEqual({
       content: '# note',
+      revision: expect.any(String),
       ISODateString: '2026-09-25T00:00:00.000Z',
       tags: [],
     })

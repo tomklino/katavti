@@ -41,22 +41,97 @@ describe('local notes', () => {
     const second = encodeURIComponent('2026/september.d/workspaces-2026-09-26/workspace-2.md')
     await local.update(first, '# Before login one')
     await local.update(second, '# Before login two')
-    const updates: unknown[][] = []
-    const remote = { list: async () => [], read: async () => { throw new Error('missing') }, update: async (...args: [string, string]) => { updates.push(args); return args[0] }, createDaily: async () => [] }
+    const imports: unknown[][] = []
+    const remote = {
+      list: async () => [], read: async () => { throw new Error('missing') },
+      update: vi.fn(), createDaily: async () => [],
+      importNote: async (id: string, content: string) => {
+        imports.push([id, content])
+        return { id: `${id}-imported`, note: { content, ISODateString: '', tags: [], revision: 'imported' } }
+      },
+    }
 
     expect(await backUpLocalNotes(remote, storage)).toBe(2)
-    expect(updates).toEqual([[first, '# Before login one'], [second, '# Before login two']])
+    expect(imports).toEqual([[first, '# Before login one'], [second, '# Before login two']])
+    expect(remote.update).not.toHaveBeenCalled()
+    expect(await backUpLocalNotes(remote, storage)).toBe(0)
     expect((await local.read(first)).content).toBe('# Before login one')
+  })
+
+  it('skips empty slots and already synchronized notes, including notes from older weeks', async () => {
+    const storage = memoryStorage()
+    storage.setItem('katavti.notes.v1', JSON.stringify({
+      old: { content: 'Old anonymous draft', ISODateString: '2026-09-01', tags: [] },
+      empty: { content: '', ISODateString: '', tags: [] },
+      synchronized: { content: 'Server copy', ISODateString: '', tags: [], revision: 'server-revision' },
+    }))
+    const remote = {
+      list: vi.fn(), read: vi.fn(), update: vi.fn(), createDaily: vi.fn(),
+      importNote: vi.fn().mockImplementation(async (_id, content) => ({ id: 'new-id', note: { content, ISODateString: '', tags: [], revision: 'new' } })),
+    }
+    expect(await backUpLocalNotes(remote, storage)).toBe(1)
+    expect(remote.importNote).toHaveBeenCalledExactlyOnceWith('old', 'Old anonymous draft')
+    expect(remote.update).not.toHaveBeenCalled()
+  })
+
+  it('keeps failed imports retryable without reimporting successful drafts', async () => {
+    const storage = memoryStorage()
+    const local = createLocalNotesApi(storage)
+    await local.update('first', 'First draft')
+    await local.update('second', 'Second draft')
+    const remote = {
+      list: vi.fn(), read: vi.fn(), update: vi.fn(), createDaily: vi.fn(),
+      importNote: vi.fn()
+        .mockResolvedValueOnce({ id: 'imported-first', note: { content: 'First draft', ISODateString: '', tags: [], revision: 'r1' } })
+        .mockRejectedValueOnce(new Error('Offline'))
+        .mockResolvedValueOnce({ id: 'imported-second', note: { content: 'Second draft', ISODateString: '', tags: [], revision: 'r2' } }),
+    }
+    await expect(backUpLocalNotes(remote, storage)).rejects.toThrow('Offline')
+    expect((await local.read('first')).content).toBe('First draft')
+    expect((await local.read('second')).content).toBe('Second draft')
+    expect(await backUpLocalNotes(remote, storage)).toBe(1)
+    expect(remote.importNote.mock.calls.map(call => call[0])).toEqual(['first', 'second', 'second'])
+  })
+
+  it('does not let a renamed import overwrite another pending browser draft on partial failure', async () => {
+    const storage = memoryStorage()
+    const local = createLocalNotesApi(storage)
+    await local.update('first', 'First draft')
+    await local.update('second', 'Second draft')
+    const remote = {
+      list: vi.fn(), read: vi.fn(), update: vi.fn(), createDaily: vi.fn(),
+      importNote: vi.fn()
+        .mockResolvedValueOnce({ id: 'second', note: { content: 'First draft', ISODateString: '', tags: [], revision: 'r1' } })
+        .mockRejectedValueOnce(new Error('Offline')),
+    }
+    await expect(backUpLocalNotes(remote, storage)).rejects.toThrow('Offline')
+    expect((await local.read('first')).content).toBe('First draft')
+    expect((await local.read('second')).content).toBe('Second draft')
+  })
+
+  it('forwards the read revision and retains rejected edits locally', async () => {
+    const local = createLocalNotesApi(memoryStorage())
+    const remote = {
+      list: vi.fn(), createDaily: vi.fn(), importNote: vi.fn(),
+      read: vi.fn().mockResolvedValue({ content: 'Original', ISODateString: '', tags: [], revision: 'r1' }),
+      update: vi.fn().mockRejectedValue(new Error('Stale note conflict')),
+    }
+    const api = createSyncedNotesApi(local, remote)
+    await api.read('note')
+    await expect(api.update('note', 'Laptop draft', 'r1')).rejects.toThrow('Stale note conflict')
+    expect(remote.update).toHaveBeenCalledWith('note', 'Laptop draft', 'r1')
+    expect((await local.read('note')).content).toBe('Laptop draft')
   })
 
   it('writes authenticated edits locally and remotely', async () => {
     const local = createLocalNotesApi(memoryStorage())
     const remoteUpdates: unknown[][] = []
-    const remote = { list: async () => [], read: async () => { throw new Error('missing') }, update: async (...args: [string, string]) => { remoteUpdates.push(args); return args[0] }, createDaily: async () => [] }
+    const remote = { list: async () => [], read: async () => { throw new Error('missing') }, update: async (...args: [string, string]) => { remoteUpdates.push(args); return { id: args[0], revision: 'r2' } }, createDaily: async () => [], importNote: vi.fn() }
     const api = createSyncedNotesApi(local, remote)
     const id = encodeURIComponent('2026/september.d/workspaces-2026-09-26/workspace-1.md')
     await api.update(id, '# Synced')
     expect((await local.read(id)).content).toBe('# Synced')
-    expect(remoteUpdates).toEqual([[id, '# Synced']])
+    expect(remoteUpdates).toEqual([[id, '# Synced', undefined]])
+    expect((await local.read(id)).revision).toBe('r2')
   })
 })

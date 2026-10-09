@@ -12,6 +12,7 @@
         <form @submit.prevent="sendLink">
           <label>Email <input v-model="email" type="email" required placeholder="you@example.com"></label>
           <button :disabled="sending">{{ sending ? 'Sending…' : 'Email me a magic link' }}</button>
+          <button v-if="development" type="button" :disabled="sending || !email.trim()" @click="fakeLogin">Fake log in (dev only)</button>
         </form>
         <p v-if="message" class="message">{{ message }}</p>
         <a v-if="developmentUrl" :href="developmentUrl">Open development magic link</a>
@@ -26,13 +27,19 @@ import { authApi } from '@/api/auth'
 
 declare global { interface Window { google?: any } }
 export default defineComponent({
-  data: () => ({ open: false, email: '', sending: false, message: '', error: '', developmentUrl: '', googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '' }),
+  data: () => ({ development: import.meta.env.DEV, open: false, email: '', sending: false, message: '', error: '', developmentUrl: '', googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '' }),
   watch: { open(value) { if (value) this.$nextTick(this.renderGoogle) } },
   methods: {
     renderGoogle() {
       if (!this.googleClientId || !window.google || !this.$refs.googleButton) return
       window.google.accounts.id.initialize({ client_id: this.googleClientId, callback: ({ credential }: any) => this.$store.dispatch('googleLogin', credential) })
       window.google.accounts.id.renderButton(this.$refs.googleButton, { theme: 'outline', size: 'large' })
+    },
+    async fakeLogin() {
+      this.sending = true; this.error = ''
+      try { await this.$store.dispatch('fakeLogin', this.email); this.open = false }
+      catch (error) { this.error = error instanceof Error ? error.message : 'Unable to sign in' }
+      finally { this.sending = false }
     },
     async sendLink() {
       this.sending = true; this.error = ''; this.developmentUrl = ''

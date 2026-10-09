@@ -1,6 +1,7 @@
 import { BlobServiceClient, type ContainerClient } from '@azure/storage-blob'
 import { DefaultAzureCredential, ManagedIdentityCredential } from '@azure/identity'
 import { NotesError, type Note, type NotesData } from './notes-data.js'
+import { checkRevision, staleNoteError } from './note-conflicts.js'
 
 type AzureContainer = Pick<ContainerClient, 'createIfNotExists' | 'getBlockBlobClient' | 'listBlobsFlat'>
 
@@ -82,31 +83,75 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData {
       try {
         await container.getBlockBlobClient(`${userId}/${id}`).upload('', 0, { conditions: { ifNoneMatch: '*' } })
       } catch (error: any) {
-        if (error?.statusCode !== 409 && error?.code !== 'BlobAlreadyExists') throw error
+        if (error?.statusCode !== 409 && error?.statusCode !== 412 && error?.code !== 'BlobAlreadyExists') throw error
       }
       ids.push(encodeURIComponent(id))
     }
     return ids
   }
 
+  async function downloadVersion(name: string) {
+    const response = await container.getBlockBlobClient(name).download()
+    if (!response.etag) throw new Error('Blob download is missing its ETag')
+    const chunks: Buffer[] = []
+    for await (const chunk of response.readableStreamBody!) chunks.push(Buffer.from(chunk))
+    return { content: Buffer.concat(chunks).toString('utf8'), revision: response.etag }
+  }
+
   async function read(userId: string, id: string): Promise<Note> {
     const decoded = decodeNoteId(id)
     try {
       await initialize()
-      const content = (await container.getBlockBlobClient(blobName(userId, id)).downloadToBuffer()).toString('utf8')
-      return { content, ISODateString: dateFromId(decoded).toISOString(), tags: [] }
+      return { ...await downloadVersion(blobName(userId, id)), ISODateString: dateFromId(decoded).toISOString(), tags: [] }
     } catch (error) {
       if (isNotFound(error)) throw new NotesError('Note not found', 404)
       throw error
     }
   }
 
-  async function update(userId: string, id: string, content: string) {
+  async function update(userId: string, id: string, content: string, revision?: string) {
     if (typeof content !== 'string') throw new NotesError('content must be a string', 400)
     const decoded = decodeNoteId(id)
+    const name = blobName(userId, id)
     await initialize()
-    await container.getBlockBlobClient(blobName(userId, id)).upload(content, Buffer.byteLength(content))
-    return decoded
+    let current: Awaited<ReturnType<typeof downloadVersion>> | undefined
+    try { current = await downloadVersion(name) }
+    catch (error) { if (!isNotFound(error)) throw error }
+    checkRevision(revision, current)
+    try {
+      const result = await container.getBlockBlobClient(name).upload(content, Buffer.byteLength(content), {
+        conditions: current ? { ifMatch: current.revision } : { ifNoneMatch: '*' },
+      })
+      if (!result.etag) throw new Error('Blob upload is missing its ETag')
+      return revision === undefined ? decoded : { id: decoded, revision: result.etag }
+    } catch (error: any) {
+      if (error?.statusCode === 412 || error?.statusCode === 409 || isNotFound(error)) throw staleNoteError()
+      throw error
+    }
+  }
+
+  async function importNote(userId: string, id: string, content: string) {
+    if (typeof content !== 'string') throw new NotesError('content must be a string', 400)
+    const decoded = decodeNoteId(id)
+    validateUserId(userId)
+    await initialize()
+    const directory = decoded.slice(0, decoded.lastIndexOf('/'))
+    const prefix = `${userId}/${directory}/`
+    let highest = 0
+    for await (const blob of container.listBlobsFlat({ prefix })) {
+      const match = blob.name.slice(prefix.length).match(/^workspace-(\d+)\.md$/)
+      if (match) highest = Math.max(highest, Number(match[1]))
+    }
+    while (true) {
+      const imported = `${directory}/workspace-${++highest}.md`
+      try {
+        const result = await container.getBlockBlobClient(`${userId}/${imported}`).upload(content, Buffer.byteLength(content), { conditions: { ifNoneMatch: '*' } })
+        if (!result.etag) throw new Error('Blob upload is missing its ETag')
+        return { id: encodeURIComponent(imported), note: { content, revision: result.etag, ISODateString: dateFromId(imported).toISOString(), tags: [] } }
+      } catch (error: any) {
+        if (error?.statusCode !== 409 && error?.statusCode !== 412 && error?.code !== 'BlobAlreadyExists') throw error
+      }
+    }
   }
 
   async function list(userId: string, query: { days?: number; bug?: string }) {
@@ -128,5 +173,5 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData {
     return matched.sort((a, b) => dateFromId(b).getTime() - dateFromId(a).getTime()).map(encodeURIComponent)
   }
 
-  return { createDaily, read, update, list }
+  return { createDaily, read, update, list, importNote }
 }

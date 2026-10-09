@@ -6,6 +6,7 @@ const api = {
   read: vi.fn(),
   update: vi.fn(),
   createDaily: vi.fn(),
+  importNote: vi.fn(),
 }
 
 beforeEach(() => {
@@ -84,6 +85,44 @@ describe('notes Vuex store', () => {
     vi.useRealTimers()
   })
 
+  it('preserves the base revision through typing and advances it between queued saves', async () => {
+    const remote = {
+      ...api,
+      read: vi.fn().mockResolvedValue({ content: 'Original', ISODateString: '', tags: [], revision: 'r1' }),
+      update: vi.fn().mockResolvedValueOnce({ id: 'note-1', revision: 'r2' }).mockResolvedValueOnce({ id: 'note-1', revision: 'r3' }),
+    }
+    const store = createStore(remote, api)
+    store.commit('setUser', { email: 'alice@example.com' })
+    await store.dispatch('loadNotes')
+    store.commit('setNoteContent', { id: 'note-1', content: 'First' })
+    expect(store.state.notes['note-1'].revision).toBe('r1')
+    await store.dispatch('saveNote', { id: 'note-1', content: 'First' })
+    await store.dispatch('saveNote', { id: 'note-1', content: 'Second' })
+    expect(remote.update.mock.calls).toEqual([['note-1', 'First', 'r1'], ['note-1', 'Second', 'r2']])
+    expect(store.state.notes['note-1'].revision).toBe('r3')
+  })
+
+  it('reports conflicts immediately, keeps the draft unsaved, and never retries stale writes', async () => {
+    vi.useFakeTimers()
+    try {
+      const conflict = Object.assign(new Error('This note changed on another device. Your draft is not saved.'), { status: 409 })
+      const remote = { ...api, update: vi.fn().mockRejectedValue(conflict) }
+      const local = { ...api, update: vi.fn().mockResolvedValue({ id: 'note-1' }) }
+      const store = createStore(remote, local)
+      store.commit('setUser', { email: 'alice@example.com' })
+      store.commit('setNote', { id: 'note-1', note: { content: 'Original', ISODateString: '', tags: [], revision: 'old' } })
+      const save = store.dispatch('saveNote', { id: 'note-1', content: 'Laptop draft' })
+      const rejected = expect(save).rejects.toThrow(conflict.message)
+      await vi.runAllTimersAsync()
+      await rejected
+      expect(remote.update).toHaveBeenCalledTimes(1)
+      expect(store.state.notes['note-1'].content).toBe('Laptop draft')
+      expect(store.state.notes['note-1'].revision).toBe('old')
+      expect(store.state.unsavedNotes['note-1']).toBe(true)
+      expect(store.state.saveErrors['note-1']).toMatch(/changed.*device/i)
+    } finally { vi.useRealTimers() }
+  })
+
   it('backs up pre-login notes and keeps them visible after login', async () => {
     const storage = memoryStorage()
     const localApi = {
@@ -96,11 +135,12 @@ describe('notes Vuex store', () => {
     }))
     api.list.mockResolvedValue([])
     api.read.mockRejectedValue(new Error('missing'))
+    api.importNote.mockResolvedValue({ id: 'imported-note', note: { content: '# Before login', ISODateString: '', tags: [], revision: 'r1' } })
     const store = createStore(api, localApi as any, storage)
 
     await store.dispatch('completeLogin', { email: 'alice@example.com' })
 
-    expect(api.update).toHaveBeenCalledWith('local-note', '# Before login')
+    expect(api.importNote).toHaveBeenCalledWith('local-note', '# Before login')
     expect(store.state.noteIds).toEqual(['local-note'])
     expect(store.state.notes['local-note'].content).toBe('# Before login')
     expect(store.state.backupStatus).toBe('1 local note backed up.')

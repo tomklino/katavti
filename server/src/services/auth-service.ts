@@ -16,6 +16,7 @@ function normalizedEmail(value: string) {
 function tokenHash(token: string) { return createHash('sha256').update(token).digest() }
 
 export function createAuthService(options: {
+  environmentType?: 'dev' | 'prod'
   googleClientId?: string
   magicLinkBaseUrl: string
   smtpUrl?: string
@@ -89,10 +90,15 @@ export function createAuthService(options: {
     return createSession({ email: normalizedEmail(payload.email), name: payload.name, picture: payload.picture })
   }
 
+  async function fakeLogin(email: string) {
+    if (options.environmentType !== 'dev') throw new Error('Fake login is only available in development')
+    return createSession({ email: normalizedEmail(email) })
+  }
+
   async function userForSession(session?: string) { return sessions ? sessions.get(session) : undefined }
   async function signOut(session?: string) { await (await sessionsReady).delete(session) }
 
-  return { requestMagicLink, consumeMagicLink, signInWithGoogle, userForSession, signOut }
+  return { requestMagicLink, consumeMagicLink, signInWithGoogle, fakeLogin, userForSession, signOut }
 }
 
 export type AuthService = ReturnType<typeof createAuthService>

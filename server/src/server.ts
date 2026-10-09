@@ -8,7 +8,7 @@ import { createAuthService, type AuthUser } from './services/auth-service.js'
 
 export async function startServer(config: AppConfig) {
   const sessions = await createSessionManager<AuthUser>(config.sessions)
-  const auth = createAuthService({ ...config.auth, sessions })
+  const auth = createAuthService({ ...config.auth, environmentType: config.environmentType, sessions })
   const server = serve({
     fetch: createApp(config, undefined, auth).fetch,
     hostname: config.server.host,

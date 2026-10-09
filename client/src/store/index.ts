@@ -5,7 +5,7 @@ import { notesApi, type ListQuery, type Note, type NotesApi } from '@/api/notes'
 
 export type State = {
   days: number; bug: string; noteIds: string[]; dailyIds: string[]; notes: Record<string, Note>
-  unsavedNotes: Record<string, boolean>
+  unsavedNotes: Record<string, boolean>; saveErrors: Record<string, string | null>
   loading: boolean; error: string | null; user: User | null; storageWarning: boolean; backupStatus: string
 }
 
@@ -22,16 +22,18 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
     : 0
   const saveQueues = new Map<string, SaveQueue>()
   return createVuexStore<State>({
-    state: { days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
+    state: { days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, saveErrors: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
     mutations: {
       setFilter(state, query: ListQuery) { if (query.days !== undefined) state.days = query.days; state.bug = query.bug || '' },
       setIds(state, ids: string[]) { state.noteIds = ids }, setDailyIds(state, ids: string[]) { state.dailyIds = ids },
       setNote(state, { id, note }: { id: string; note: Note }) { state.notes[id] = note },
       setNoteContent(state, { id, content }: { id: string; content: string }) {
         const previous = state.notes[id]
-        state.notes[id] = { content, ISODateString: previous?.ISODateString || new Date().toISOString(), tags: previous?.tags || [] }
+        state.notes[id] = { ...previous, content, ISODateString: previous?.ISODateString || new Date().toISOString(), tags: previous?.tags || [] }
       },
       setNoteUnsaved(state, { id, value }: { id: string; value: boolean }) { state.unsavedNotes[id] = value },
+      setNoteRevision(state, { id, revision }: { id: string; revision: string }) { if (state.notes[id]) state.notes[id].revision = revision },
+      setSaveError(state, { id, error }: { id: string; error: string | null }) { state.saveErrors[id] = error },
       setLoading(state, value: boolean) { state.loading = value }, setError(state, value: string | null) { state.error = value },
       setUser(state, user: User | null) { state.user = user }, setStorageWarning(state, value: boolean) { state.storageWarning = value },
       setBackupStatus(state, value: string) { state.backupStatus = value },
@@ -57,6 +59,7 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
         if (token) history.replaceState({}, '', location.pathname)
       },
       async googleLogin({ dispatch }, credential: string) { const { user } = await authApi.google(credential); await dispatch('completeLogin', user) },
+      async fakeLogin({ dispatch }, email: string) { const { user } = await authApi.fakeLogin(email); await dispatch('completeLogin', user) },
       async logout({ commit }) { await authApi.logout(); commit('setUser', null) },
       dismissStorageWarning({ commit }) { sessionStorage.setItem('katavti.storage-warning-dismissed', '1'); commit('setStorageWarning', false) },
       async loadNotes({ state, commit }, query?: ListQuery) {
@@ -73,6 +76,20 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
         const api = selectedApi(state); const date = new Date().toISOString().slice(0, 10)
         const ids = await api.createDaily(count, date); commit('setDailyIds', ids)
         await Promise.all(ids.map(async id => commit('setNote', { id, note: await api.read(id) })))
+      },
+      async reloadNote({ state, commit }, id: string) {
+        try {
+          // Unlike normal offline-friendly reads, conflict recovery must fetch
+          // the latest remote version, not silently return the local draft.
+          const note = await (state.user ? remoteApi : localApi).read(id)
+          if (state.user) await localApi.update(id, note.content, note.revision)
+          commit('setNote', { id, note })
+          commit('setNoteUnsaved', { id, value: false })
+          commit('setSaveError', { id, error: null })
+        } catch (error) {
+          commit('setSaveError', { id, error: `Unable to reload this note: ${(error as Error).message || 'Please try again.'}` })
+          throw error
+        }
       },
       saveNote({ state, commit }, { id, content }: { id: string; content: string }) {
         commit('setNoteContent', { id, content })
@@ -95,11 +112,17 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
               let attempts = 0
               while (true) {
                 try {
-                  await selectedApi(state).update(id, saving)
+                  const api = selectedApi(state)
+                  const saved = state.user
+                    ? await api.update(id, saving, state.notes[id]?.revision)
+                    : await api.update(id, saving)
+                  if (typeof saved !== 'string' && saved?.revision) commit('setNoteRevision', { id, revision: saved.revision })
+                  commit('setSaveError', { id, error: null })
                   break
                 } catch (error) {
                   attempts += 1
-                  if (attempts >= 3) throw error
+                  const status = (error as { status?: number })?.status
+                  if (status === 409 || status === 412 || attempts >= 3) throw error
                   await new Promise(resolve => window.setTimeout(resolve, 500 * attempts))
                 }
               }
@@ -112,6 +135,7 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
             queue.waiters.forEach(waiter => waiter.resolve())
             if (!state.user && !sessionStorage.getItem('katavti.storage-warning-dismissed')) commit('setStorageWarning', true)
           } catch (error) {
+            commit('setSaveError', { id, error: (error as Error).message || 'Unable to save this note. Your draft remains in this browser.' })
             queue.waiters.forEach(waiter => waiter.reject(error))
             throw error
           } finally {

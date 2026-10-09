@@ -1,6 +1,8 @@
 import path from 'node:path'
-import { lstat, mkdir, open, readFile, readdir, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, readdir, writeFile, rename, rm, link } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
 import { NotesError, type Note, type NotesData } from './notes-data.js'
+import { checkRevision } from './note-conflicts.js'
 
 type FileSystem = {
   mkdir(path: string, options: { recursive: true }): Promise<unknown>
@@ -99,31 +101,92 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     return ids
   }
 
+  async function readVersion(file: string) {
+    const handle = await open(file, 'r')
+    try {
+      const content = await handle.readFile('utf8')
+      const stat = await handle.stat({ bigint: true })
+      const revision = createHash('sha256').update(`${stat.ino}:${stat.mtimeNs}:${content}`).digest('hex')
+      return { content, revision }
+    } finally { await handle.close() }
+  }
+
+  // A filesystem lock serializes compare-and-write even across API processes.
+  // Never remove another writer's lock on timeout: fail closed instead.
+  async function withWriteLock<T>(root: string, file: string, work: () => Promise<T>): Promise<T> {
+    await rejectSymlinkPath(root, file)
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await rejectSymlinkPath(root, file)
+    const lock = `${file}.lock`
+    const deadline = Date.now() + 5_000
+    while (true) {
+      try { await mkdir(lock); break }
+      catch (error: any) {
+        if (error?.code !== 'EEXIST') throw error
+        if (Date.now() >= deadline) throw new NotesError('Note is busy; please try again', 503)
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+    }
+    try { return await work() } finally { await rm(lock, { recursive: true, force: true }) }
+  }
+
   async function read(userId: string, id: string): Promise<Note> {
     const { decoded, resolved } = notePath(userId, id)
     await rejectSymlinkPath(userDirectory(userId), resolved)
     try {
-      return { content: await fs.readFile(resolved, 'utf8'), ISODateString: dateFromId(decoded).toISOString(), tags: [] }
+      return { ...await readVersion(resolved), ISODateString: dateFromId(decoded).toISOString(), tags: [] }
     } catch (error: any) {
       if (error?.code === 'ENOENT') throw new NotesError('Note not found', 404)
       throw error
     }
   }
 
-  async function update(userId: string, id: string, content: string) {
+  async function update(userId: string, id: string, content: string, revision?: string) {
+    if (typeof content !== 'string') throw new NotesError('content must be a string', 400)
+    const { decoded, resolved } = notePath(userId, id)
+    return withWriteLock(userDirectory(userId), resolved, async () => {
+      await rejectSymlinkPath(userDirectory(userId), resolved)
+      let current: Awaited<ReturnType<typeof readVersion>> | undefined
+      try { current = await readVersion(resolved) }
+      catch (error: any) { if (error?.code !== 'ENOENT') throw error }
+      checkRevision(revision, current)
+      const temporary = `${resolved}.${randomUUID()}.tmp`
+      try {
+        await fs.writeFile(temporary, content, 'utf8')
+        await rename(temporary, resolved)
+      } finally { await rm(temporary, { force: true }) }
+      const saved = await readVersion(resolved)
+      return revision === undefined ? decoded : { id: decoded, revision: saved.revision }
+    })
+  }
+
+  async function importNote(userId: string, id: string, content: string) {
     if (typeof content !== 'string') throw new NotesError('content must be a string', 400)
     const { decoded, resolved } = notePath(userId, id)
     const root = userDirectory(userId)
     await rejectSymlinkPath(root, resolved)
+    const directory = path.dirname(resolved)
+    await fs.mkdir(directory, { recursive: true })
+    await rejectSymlinkPath(root, directory)
+    const names = await fs.readdir(directory)
+    let number = names.reduce((highest, name) => {
+      const match = name.match(/^workspace-(\d+)\.md$/)
+      return match ? Math.max(highest, Number(match[1])) : highest
+    }, 0) + 1
+    const temporary = path.join(directory, `${randomUUID()}.tmp`)
     try {
-      await fs.mkdir(path.dirname(resolved), { recursive: true })
-      await rejectSymlinkPath(root, resolved)
-      await fs.writeFile(resolved, content, 'utf8')
-    } catch (error: any) {
-      if (error?.code === 'ENOENT') throw new NotesError('Note not found', 404)
-      throw error
-    }
-    return decoded
+      await fs.writeFile(temporary, content, 'utf8')
+      while (true) {
+        const imported = `${path.dirname(decoded)}/workspace-${number++}.md`
+        const destination = path.join(root, imported)
+        try {
+          // Atomic create-only publication: concurrent imports cannot collide.
+          await link(temporary, destination)
+          const importedId = encodeURIComponent(imported)
+          return { id: importedId, note: await read(userId, importedId) }
+        } catch (error: any) { if (error?.code !== 'EEXIST') throw error }
+      }
+    } finally { await rm(temporary, { force: true }) }
   }
 
   async function list(userId: string, query: { days?: number; bug?: string }) {
@@ -150,5 +213,5 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     return matched.sort((a, b) => dateFromId(b).getTime() - dateFromId(a).getTime()).map(encodeURIComponent)
   }
 
-  return { createDaily, read, update, list }
+  return { createDaily, read, update, list, importNote }
 }

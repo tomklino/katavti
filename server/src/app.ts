@@ -15,7 +15,7 @@ export function createApp(config: AppConfig, injectedNotesData?: NotesData, inje
   const notesData = injectedNotesData ?? (config.storage.module === 'azure'
     ? createAzureNotesData(config.storage.azure)
     : createFileNotesData({ dataDir: config.storage.dataDir }))
-  const auth = injectedAuth ?? createAuthService(config.auth)
+  const auth = injectedAuth ?? createAuthService({ ...config.auth, environmentType: config.environmentType })
   const apiPath = config.api.basePath
   app.use(`${apiPath}/*`, cors({
     origin: origin => {
@@ -30,7 +30,7 @@ export function createApp(config: AppConfig, injectedNotesData?: NotesData, inje
     },
   }))
   app.route(`${apiPath}/health`, healthRoutes())
-  app.route(`${apiPath}/auth`, authRoutes(auth, config.environmentType === 'prod'))
+  app.route(`${apiPath}/auth`, authRoutes(auth, config.environmentType))
   app.use(`${apiPath}/notes/*`, async (c, next) => {
     const user = await sessionUser(auth, c.req.header('cookie'))
     if (!user) return c.json({ error: 'Unauthenticated' }, 401)

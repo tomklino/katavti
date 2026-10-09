@@ -33,12 +33,21 @@ export function createLocalNotesApi(storage: Storage = localStorage): NotesApi {
       if (!note) throw new Error('Note not found')
       return note
     },
-    async update(id: string, content: string) {
+    async update(id: string, content: string, revision?: string) {
       const notes = readStorage(storage)
       const previous = notes[id]
-      notes[id] = { content, ISODateString: previous?.ISODateString || dateFromId(id).toISOString(), tags: previous?.tags || [] }
+      notes[id] = { ...previous, content, revision, ISODateString: previous?.ISODateString || dateFromId(id).toISOString(), tags: previous?.tags || [] }
       writeStorage(storage, notes)
       return decodeURIComponent(id)
+    },
+    async importNote(id: string, content: string) {
+      const notes = readStorage(storage)
+      const directory = decodeURIComponent(id).replace(/workspace-\d+\.md$/, '')
+      let number = 1
+      let importedId: string
+      do { importedId = encodeURIComponent(`${directory}workspace-${number++}.md`) } while (notes[importedId])
+      await this.update(importedId, content)
+      return { id: importedId, note: await this.read(importedId) }
     },
     async createDaily(count: number, date: string) {
       const value = new Date(`${date}T00:00:00.000Z`)
@@ -59,9 +68,22 @@ export function createLocalNotesApi(storage: Storage = localStorage): NotesApi {
 }
 
 export async function backUpLocalNotes(remote: NotesApi, storage: Storage = localStorage) {
-  const entries = Object.entries(readStorage(storage))
-  await Promise.all(entries.map(([id, note]) => remote.update(id, note.content)))
-  return entries.length
+  const entries = Object.entries(readStorage(storage)).filter(([, note]) =>
+    note.content.length > 0 && !note.revision && note.backedUpContent !== note.content)
+  let count = 0
+  for (const [id, note] of entries) {
+    const imported = await remote.importNote(id, note.content)
+    // Persist progress after each successful import. Keep the original local
+    // draft until account reload succeeds, and don't repeat completed imports.
+    const notes = readStorage(storage)
+    if (notes[id]) notes[id].backedUpContent = note.content
+    // Server IDs are collision-free on the server, not necessarily in this
+    // browser. Never replace a different pending local draft while importing.
+    if (!notes[imported.id]) notes[imported.id] = imported.note
+    writeStorage(storage, notes)
+    count++
+  }
+  return count
 }
 
 export function createSyncedNotesApi(local: NotesApi, remote: NotesApi): NotesApi {
@@ -73,11 +95,22 @@ export function createSyncedNotesApi(local: NotesApi, remote: NotesApi): NotesAp
     async read(id) {
       try {
         const remoteNote = await remote.read(id)
-        await local.update(id, remoteNote.content)
+        await local.update(id, remoteNote.content, remoteNote.revision)
         return remoteNote
       } catch { return local.read(id) }
     },
-    async update(id, content) { await local.update(id, content); return remote.update(id, content) },
+    async update(id, content, revision) {
+      await local.update(id, content, revision)
+      const saved = await remote.update(id, content, revision)
+      if (typeof saved !== 'string' && saved?.revision) {
+        // A later edit can arrive while this request is in flight. Advance the
+        // base revision without replacing that newer browser draft.
+        const current = await local.read(id)
+        await local.update(id, current.content, saved.revision)
+      }
+      return saved
+    },
+    importNote: (id, content) => remote.importNote(id, content),
     async createDaily(count, date) {
       const [localIds, remoteIds] = await Promise.all([local.createDaily(count, date), remote.createDaily(count, date)])
       return [...new Set([...localIds, ...remoteIds])]

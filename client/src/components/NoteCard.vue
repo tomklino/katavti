@@ -10,11 +10,12 @@
       </div>
       <span v-else class="note-chevron" aria-hidden="true">↗</span>
     </header>
+    <p v-if="active && saveError" class="save-error" role="alert">{{ saveError }} Copy your draft before <button type="button" :disabled="reloading" @click.stop="reload">reloading the latest version</button>.</p>
     <div class="note-body" :aria-hidden="!active">
       <MarkdownEditor v-if="raw" ref="editor" :class="{ unsaved }" :model-value="note.content" :readonly="!editable" :aria-label="`Edit ${title}`" @update:model-value="edit" />
       <div v-else class="rendered" v-html="rendered" />
     </div>
-    <footer v-if="active" class="note-footer"><span>{{ wordCount }} words <span class="footer-separator">/</span> Markdown</span><span class="save-state" :class="{ pending: unsaved }" role="status"><span />{{ unsaved ? 'Saving changes…' : editable ? 'All changes saved' : 'Read-only · open Daily to write' }}</span></footer>
+    <footer v-if="active" class="note-footer"><span>{{ wordCount }} words <span class="footer-separator">/</span> Markdown</span><span class="save-state" :class="{ pending: unsaved }" role="status"><span />{{ saveError ? 'Not saved' : unsaved ? 'Saving changes…' : editable ? 'All changes saved' : 'Read-only · open Daily to write' }}</span></footer>
   </article>
 </template>
 
@@ -27,7 +28,7 @@ export default defineComponent({
   components: { MarkdownEditor },
   props: { id: { type: String, required: true }, index: { type: Number, default: 0 }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean, browsing: Boolean },
   emits: ['activate'],
-  data() { return { raw: this.startRaw, copyLabel: 'Copy', timer: 0, pendingContent: null as string | null } },
+  data() { return { raw: this.startRaw, copyLabel: 'Copy', timer: 0, reloading: false, pendingContent: null as string | null } },
   computed: {
     note(): any { return this.$store.state.notes[this.id] || { content: '', ISODateString: new Date().toISOString() } },
     title(): string { return this.note.content.split('\n').find((line: string) => line.trim())?.replace(/^#+\s*/, '') || 'Untitled note' },
@@ -36,6 +37,7 @@ export default defineComponent({
     wordCount(): number { return this.note.content.trim() ? this.note.content.trim().split(/\s+/).length : 0 },
     rendered(): string { return markdown.render(this.note.content) },
     unsaved(): boolean { return Boolean(this.$store.state.unsavedNotes[this.id]) },
+    saveError(): string | null { return this.$store.state.saveErrors[this.id] || null },
   },
   watch: {
     active(value: boolean) { if (value) this.focusEditor() },
@@ -61,6 +63,15 @@ export default defineComponent({
       const content = this.pendingContent
       this.pendingContent = null
       this.$store.dispatch('saveNote', { id: this.id, content }).catch(() => undefined)
+    },
+    async reload() {
+      if (this.reloading) return
+      this.reloading = true
+      clearTimeout(this.timer)
+      this.pendingContent = null
+      try { await this.$store.dispatch('reloadNote', this.id) }
+      catch { /* The store keeps the draft and displays the reload error. */ }
+      finally { this.reloading = false }
     },
     async copy() {
       try { await navigator.clipboard.writeText(this.note.content); this.copyLabel = 'Copied!' }
@@ -104,6 +115,9 @@ time span { opacity: .8; }
 .rendered { box-sizing: border-box; font-family: var(--reading-font); font-size: 14px; line-height: 1.65; margin: 0; max-width: 900px; padding: 0 20px 16px; text-align: left; }
 .note-footer { align-items: center; border-top: 1px solid var(--line); color: var(--muted); display: flex; flex-shrink: 0; font-size: 9px; justify-content: space-between; padding: 6px 14px; }
 .footer-separator { margin: 0 7px; opacity: .6; }
+.save-error { background: #fee2e2; color: #991b1b; flex-shrink: 0; font-size: 12px; margin: 0; padding: 8px 14px; }
+.save-error button { background: none; border: 0; color: inherit; cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+.save-error button:disabled { cursor: wait; opacity: .6; }
 .save-state { align-items: center; display: flex; gap: 5px; }
 .save-state > span { background: var(--accent); border-radius: 50%; height: 4px; width: 4px; }
 .save-state.pending > span { background: #d97706; }
