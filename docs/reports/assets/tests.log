@@ -1,0 +1,91 @@
+
+> katavti@0.3.2 test
+> npm run test:server && npm run test:client
+
+
+> katavti@0.3.2 test:server
+> vitest run server/test
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90m/home/tom/workspace/tomklino/katavti[39m
+
+ [32m✓[39m server/test/unit/notes-conflicts.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 147[2mms[22m[39m
+ [32m✓[39m server/test/unit/config.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 128[2mms[22m[39m
+ [32m✓[39m server/test/unit/file-notes-data.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 164[2mms[22m[39m
+ [32m✓[39m server/test/unit/note-routes.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 84[2mms[22m[39m
+ [32m✓[39m server/test/unit/kubernetes-routing.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 80[2mms[22m[39m
+ [32m✓[39m server/test/unit/azure-notes-data.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 159[2mms[22m[39m
+ [32m✓[39m server/test/unit/fake-login.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 59[2mms[22m[39m
+ [32m✓[39m server/test/e2e/api.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 461[2mms[22m[39m
+ [32m✓[39m server/test/unit/file-session-backend.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m server/test/unit/session-manager.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m server/test/unit/session-factory.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m server/test/unit/auth-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m server/test/e2e/assets.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 1018[2mms[22m[39m
+ [32m✓[39m server/test/unit/config-validation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+[90mstdout[2m | server/test/e2e/assets-browser.test.ts
+[22m[39mPort 5173 is in use, trying another one...
+
+[90mstdout[2m | server/test/e2e/multi-device.test.ts
+[22m[39mPort 5173 is in use, trying another one...
+
+[90mstdout[2m | server/test/e2e/multi-device.test.ts
+[22m[39mPort 5174 is in use, trying another one...
+
+ [32m✓[39m server/test/unit/app-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32m✓[39m server/test/unit/azure-assets.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 109[2mms[22m[39m
+ [32m✓[39m server/test/e2e/assets-browser.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 23353[2mms[22m[39m
+   [32m✓[39m headless asset acceptance tests [2m(3)[22m
+     [33m[2m✓[22m[39m uploads any type, inserts at cursor, persists exact bytes, downloads after reload and offline, and stays usable on mobile[33m 6467[2mms[22m[39m
+     [33m[2m✓[22m[39m backs up anonymous assets to a collision-free imported note in its historical month and caches downloads on another device[33m 8845[2mms[22m[39m
+     [33m[2m✓[22m[39m shows storage and size failures without broken links, and keeps local downloads when server upload fails[33m 6899[2mms[22m[39m
+ [32m✓[39m server/test/e2e/multi-device.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 50035[2mms[22m[39m
+   [32m✓[39m client-clock daily notes [2m(2)[22m
+     [33m[2m✓[22m[39m creates the browser-local day, never the server day, across midnight in America/Los_Angeles[33m 4952[2mms[22m[39m
+     [33m[2m✓[22m[39m creates the browser-local day, never the server day, across midnight in Asia/Tokyo[33m 3695[2mms[22m[39m
+   [32m✓[39m multi-device conflict safety [2m(4)[22m
+     [33m[2m✓[22m[39m rejects a stale laptop save with a conflict error and preserves the mobile note[33m 9065[2mms[22m[39m
+     [33m[2m✓[22m[39m visibly warns when editing a stale note, keeps the draft, and does not claim it was saved[33m 8897[2mms[22m[39m
+     [33m[2m✓[22m[39m renames anonymous backups across weeks without overwriting existing notes or erasing them with empty slots[33m 22462[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m18 passed[39m[22m[90m (18)[39m
+[2m      Tests [22m [1m[32m79 passed[39m[22m[90m (79)[39m
+[2m   Start at [22m 22:59:35
+[2m   Duration [22m 52.53s[2m (tests 87%, import 11%, transform 2%)[22m
+
+
+> katavti@0.3.2 test:client
+> npm --prefix client run test:unit
+
+
+> client@0.2.3 test:unit
+> vitest run
+
+
+ RUN  v3.2.7 /home/tom/workspace/tomklino/katavti/client
+
+ ✓ tests/unit/lookback-menu.spec.ts (3 tests) 205ms
+ ✓ tests/unit/markdown-editor.spec.ts (4 tests) 256ms
+ ✓ tests/unit/home-view.spec.ts (1 test) 165ms
+ ✓ tests/unit/app-filters.spec.ts (6 tests) 643ms
+ ✓ tests/unit/daily-view.spec.ts (2 tests) 413ms
+ ✓ tests/unit/app-rollover.spec.ts (3 tests) 566ms
+   ✓ page-wide previous-day warning > starts today with the first note active even if a later old note was selected  376ms
+ ✓ tests/unit/note-card.spec.ts (15 tests) 1251ms
+   ✓ NoteCard focus states > waits for two seconds without typing before saving  408ms
+ ✓ tests/unit/local-notes.spec.ts (8 tests) 104ms
+ ✓ tests/unit/login-panel.spec.ts (3 tests) 196ms
+ ✓ tests/unit/markdown-renderer.spec.ts (3 tests) 50ms
+ ✓ tests/unit/message-bar.spec.ts (4 tests) 129ms
+ ✓ tests/unit/api.spec.ts (4 tests) 43ms
+ ✓ tests/unit/store.spec.ts (7 tests) 48ms
+ ✓ tests/unit/daily-rollover.spec.ts (2 tests) 23ms
+ ✓ tests/unit/theme.spec.ts (4 tests) 14ms
+ ✓ tests/unit/app-layout.spec.ts (2 tests) 7ms
+ ✓ tests/unit/main.spec.ts (1 test) 9ms
+
+ Test Files  17 passed (17)
+      Tests  72 passed (72)
+   Start at  23:00:29
+   Duration  7.82s (transform 2.78s, setup 0ms, collect 11.48s, tests 4.12s, environment 18.06s, prepare 4.30s)
+

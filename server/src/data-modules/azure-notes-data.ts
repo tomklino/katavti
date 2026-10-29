@@ -2,6 +2,7 @@ import { BlobServiceClient, type ContainerClient } from '@azure/storage-blob'
 import { DefaultAzureCredential, ManagedIdentityCredential } from '@azure/identity'
 import { NotesError, type Note, type NotesData } from './notes-data.js'
 import { checkRevision, staleNoteError } from './note-conflicts.js'
+import { validateAssetFilename, type AssetsData } from './assets-data.js'
 
 type AzureContainer = Pick<ContainerClient, 'createIfNotExists' | 'getBlockBlobClient' | 'listBlobsFlat'>
 
@@ -14,7 +15,7 @@ type AzureNotesOptions = {
   now?: () => Date
 }
 
-export function createAzureNotesData(options: AzureNotesOptions): NotesData {
+export function createAzureNotesData(options: AzureNotesOptions): NotesData & AssetsData {
   if (!options.container && (!options.containerName || (!options.connectionString && !options.accountName))) {
     throw new Error('Azure notes data requires containerName and either connectionString or accountName')
   }
@@ -162,7 +163,7 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData {
     const matched: string[] = []
     for await (const blob of container.listBlobsFlat({ prefix })) {
       const id = blob.name.slice(prefix.length)
-      if (!/\.md$/.test(id)) continue
+      if (!/^\d{4}\/[a-z]+\.d\/workspaces-\d{4}-\d{2}-\d{2}\/workspace-\d+\.md$/.test(id)) continue
       let content: string
       try { content = (await container.getBlockBlobClient(blob.name).downloadToBuffer()).toString('utf8') } catch { continue }
       if (query.bug) {
@@ -173,5 +174,28 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData {
     return matched.sort((a, b) => dateFromId(b).getTime() - dateFromId(a).getTime()).map(encodeURIComponent)
   }
 
-  return { createDaily, read, update, list, importNote }
+  function assetName(userId: string, noteId: string, filename: string) {
+    validateUserId(userId)
+    const month = decodeNoteId(noteId).split('/').slice(0, 2).join('/')
+    return `${userId}/${month}/assets/${validateAssetFilename(filename)}`
+  }
+
+  async function uploadAsset(userId: string, noteId: string, filename: string, bytes: Uint8Array) {
+    await read(userId, noteId)
+    const blob = container.getBlockBlobClient(assetName(userId, noteId, filename))
+    try {
+      await blob.uploadData(bytes, { conditions: { ifNoneMatch: '*' }, blobHTTPHeaders: { blobContentType: 'application/octet-stream' } })
+    } catch (error: any) {
+      if (error?.statusCode !== 409 && error?.statusCode !== 412) throw error
+      if (!(await blob.downloadToBuffer()).equals(Buffer.from(bytes))) throw new NotesError('Asset already exists with different content', 409)
+    }
+  }
+
+  async function readAsset(userId: string, noteId: string, filename: string) {
+    await initialize()
+    try { return await container.getBlockBlobClient(assetName(userId, noteId, filename)).downloadToBuffer() }
+    catch (error) { if (isNotFound(error)) throw new NotesError('Asset not found', 404); throw error }
+  }
+
+  return { createDaily, read, update, list, importNote, uploadAsset, readAsset }
 }

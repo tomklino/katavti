@@ -1,0 +1,52 @@
+sequenceDiagram
+    actor User
+    participant UI as NoteCard / asset client
+    participant IDB as Browser IndexedDB
+    participant Notes as Vuex / localStorage
+    participant API as Hono API (session cookie)
+    participant Disk as Note storage
+
+    User->>UI: Attach one or more files
+    UI->>UI: Check 50 MiB limit and generate UUID filename
+    UI->>IDB: Store original Blob under owner/year/month/assets/name
+    IDB-->>UI: Transaction committed
+    alt Authenticated
+        UI->>API: PUT /notes/{encodedNoteId}/assets/{filename} (raw bytes)
+        API->>API: Authenticate and validate paths, limit, and source note
+        API->>Disk: Atomically publish year/month.d/assets/filename
+        Disk-->>API: Saved (or identical retry)
+        API-->>UI: 201 {filename, path, size}
+        UI->>IDB: Mark account copy synced
+    else Anonymous
+        Note over UI,IDB: No asset HTTP request, bytes remain browser-local
+    end
+    UI->>Notes: Insert [name](../assets/filename) at cursor / append in Preview
+    Notes->>Notes: Existing debounced note save to localStorage
+    opt Authenticated note save
+        Notes->>API: POST /notes/{encodedNoteId} {content, revision}
+        API->>Disk: Conflict-checked Markdown save
+        API-->>Notes: New revision
+    end
+
+    opt Later anonymous login
+        Notes->>API: POST /notes/import {id, content}
+        API->>Disk: Create collision-free note in original date directory
+        API-->>Notes: New note ID (same month)
+        Notes->>IDB: Find referenced anonymous Blobs
+        Notes->>API: PUT assets using imported note ID
+        API->>Disk: Save in original month/assets
+        Note over Notes,Disk: Relative Markdown links stay unchanged
+    end
+
+    User->>UI: Click an asset link in Preview
+    UI->>IDB: Look up owner/month/filename
+    alt Blob already cached
+        IDB-->>UI: Original Blob (works offline)
+    else Uncached authenticated asset
+        UI->>API: GET /notes/{encodedNoteId}/assets/{filename}
+        API->>Disk: Read authenticated user's month asset
+        Disk-->>API: Binary bytes
+        API-->>UI: 200 attachment, octet-stream, nosniff, sandbox
+        UI->>IDB: Cache downloaded Blob
+    end
+    UI-->>User: Download via short-lived Blob URL

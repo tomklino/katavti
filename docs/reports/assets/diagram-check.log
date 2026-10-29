@@ -1,0 +1,4 @@
+Local headless Chrome, installed VS Code Mermaid bundle, loopback requests only.
+PASS: reproduced original semicolon parse error with installed Mermaid parser
+PASS: REPORT.md parsed and rendered (41269 SVG characters), all participant labels present
+PASS: api-sequence.mmd parsed and rendered (43701 SVG characters), all participant labels present

@@ -6,14 +6,17 @@
       <span v-if="label" class="note-label">{{ label }}</span>
       <div v-if="active" class="actions">
         <label class="raw-toggle"><input v-model="raw" type="checkbox"><span>{{ raw ? 'Raw' : 'Preview' }}</span></label>
+        <button v-if="editable" type="button" :disabled="uploading" @click.stop="chooseAssets">{{ uploading ? 'Uploading…' : 'Attach' }}</button>
+        <input v-if="editable" ref="assetInput" class="asset-input" type="file" multiple aria-label="Upload assets" @change="attachFiles" @click.stop>
         <button type="button" @click.stop="copy"><span aria-hidden="true">▢</span> {{ copyLabel }}</button>
       </div>
       <span v-else class="note-chevron" aria-hidden="true">↗</span>
     </header>
     <p v-if="active && saveError" class="save-error" role="alert">{{ saveError }} Copy your draft before <button type="button" :disabled="reloading" @click.stop="reload">reloading the latest version</button>.</p>
+    <p v-if="active && assetMessage" class="asset-message" :role="assetError ? 'alert' : 'status'">{{ assetMessage }}</p>
     <div class="note-body" :aria-hidden="!active">
       <MarkdownEditor v-if="raw" ref="editor" :class="{ unsaved }" :model-value="note.content" :readonly="!editable" :aria-label="`Edit ${title}`" @update:model-value="edit" />
-      <div v-else class="rendered" v-html="rendered" />
+      <div v-else class="rendered" @click="openAsset" v-html="rendered" />
     </div>
     <footer v-if="active" class="note-footer"><span>{{ wordCount }} words <span class="footer-separator">/</span> Markdown</span><span class="save-state" :class="{ pending: unsaved }" role="status"><span />{{ saveError ? 'Not saved' : unsaved ? 'Saving changes…' : editable ? 'All changes saved' : 'Read-only · open Daily to write' }}</span></footer>
   </article>
@@ -23,12 +26,13 @@
 import { defineComponent } from 'vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { markdown } from '@/markdown'
+import { downloadNoteAsset, uploadNoteAsset } from '@/api/assets'
 
 export default defineComponent({
   components: { MarkdownEditor },
   props: { id: { type: String, required: true }, index: { type: Number, default: 0 }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean, browsing: Boolean },
   emits: ['activate'],
-  data() { return { raw: this.startRaw, copyLabel: 'Copy', timer: 0, reloading: false, pendingContent: null as string | null } },
+  data() { return { raw: this.startRaw, copyLabel: 'Copy', timer: 0, reloading: false, pendingContent: null as string | null, uploading: false, assetMessage: '', assetError: false } },
   computed: {
     note(): any { return this.$store.state.notes[this.id] || { content: '', ISODateString: new Date().toISOString() } },
     title(): string { return this.note.content.split('\n').find((line: string) => line.trim())?.replace(/^#+\s*/, '') || 'Untitled note' },
@@ -73,6 +77,32 @@ export default defineComponent({
       catch { /* The store keeps the draft and displays the reload error. */ }
       finally { this.reloading = false }
     },
+    chooseAssets() { (this.$refs.assetInput as HTMLInputElement)?.click() },
+    async attachFiles(event: Event) {
+      const input = event.target as HTMLInputElement
+      const files = Array.from(input.files || [])
+      if (!files.length || this.uploading) return
+      this.uploading = true; this.assetMessage = ''; this.assetError = false
+      const noteId = this.id
+      try {
+        for (const file of files) {
+          const result = await uploadNoteAsset(noteId, file, this.$store.state.user?.email || '')
+          const insertion = `\n${result.markdown}\n`
+          if (!(this.raw && (this.$refs.editor as any)?.insert(insertion))) this.edit(this.note.content + insertion)
+          if (result.warning) { this.assetMessage = result.warning; this.assetError = true }
+        }
+        if (!this.assetError) this.assetMessage = `${files.length} asset${files.length === 1 ? '' : 's'} attached. Click a link in Preview to download.`
+      } catch (error) { this.assetMessage = (error as Error).message || 'Unable to store asset in this browser.'; this.assetError = true }
+      finally { this.uploading = false; input.value = '' }
+    },
+    async openAsset(event: MouseEvent) {
+      const anchor = (event.target as HTMLElement).closest('a')
+      const match = anchor?.getAttribute('href')?.match(/^\.\.\/assets\/([0-9a-f-]{36}-[a-zA-Z0-9._-]{1,120})$/)
+      if (!match) return
+      event.preventDefault(); event.stopPropagation()
+      try { await downloadNoteAsset(this.id, match[1], this.$store.state.user?.email || '') }
+      catch (error) { this.assetMessage = (error as Error).message; this.assetError = true }
+    },
     async copy() {
       try { await navigator.clipboard.writeText(this.note.content); this.copyLabel = 'Copied!' }
       catch { this.copyLabel = 'Copy failed' }
@@ -104,6 +134,9 @@ time span { opacity: .8; }
 .note-label { background: var(--tag-bg); border-radius: 4px; color: var(--tag-text); font-size: 10px; padding: 3px 8px; }
 .note-chevron { color: var(--muted); font-size: 15px; margin-left: 8px; }
 .actions { align-items: center; display: flex; gap: 12px; white-space: nowrap; }
+.asset-input { display: none; }
+.asset-message { color: var(--muted); flex-shrink: 0; font-size: 11px; margin: 0; padding: 6px 14px; }
+.actions button:disabled { cursor: wait; opacity: .6; }
 .actions button { align-items: center; background: var(--surface); border-color: var(--line); display: flex; font-size: 11px; gap: 5px; padding: 7px 10px; }
 .raw-toggle { align-items: center; color: var(--muted); cursor: pointer; display: flex; font-size: 11px; gap: 6px; }
 .raw-toggle input { accent-color: var(--accent); height: 12px; margin: 0; width: 12px; }

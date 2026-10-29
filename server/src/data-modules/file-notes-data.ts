@@ -3,6 +3,7 @@ import { lstat, mkdir, open, readFile, readdir, writeFile, rename, rm, link } fr
 import { createHash, randomUUID } from 'node:crypto'
 import { NotesError, type Note, type NotesData } from './notes-data.js'
 import { checkRevision } from './note-conflicts.js'
+import { validateAssetFilename, type AssetsData } from './assets-data.js'
 
 type FileSystem = {
   mkdir(path: string, options: { recursive: true }): Promise<unknown>
@@ -22,7 +23,7 @@ const nodeFs: FileSystem = {
   async touch(file) { const handle = await open(file, 'a'); await handle.close() },
 }
 
-export function createFileNotesData(options: { dataDir: string; now?: () => Date }): NotesData {
+export function createFileNotesData(options: { dataDir: string; now?: () => Date }): NotesData & AssetsData {
   const fs = nodeFs
   const now = options.now ?? (() => new Date())
 
@@ -194,7 +195,7 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     let names: string[]
     try { names = await fs.readdir(root, { recursive: true }) }
     catch (error: any) { if (error?.code === 'ENOENT') return []; throw error }
-    const candidates = names.filter(name => /\.(md|txt)$/.test(name))
+    const candidates = names.filter(name => /^\d{4}\/[a-z]+\.d\/workspaces-\d{4}-\d{2}-\d{2}\/workspace-\d+\.md$/.test(name))
     const cutoff = new Date(now()); cutoff.setUTCDate(cutoff.getUTCDate() - (query.days ?? 5))
     const matched: string[] = []
     await Promise.all(candidates.map(async id => {
@@ -213,5 +214,40 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     return matched.sort((a, b) => dateFromId(b).getTime() - dateFromId(a).getTime()).map(encodeURIComponent)
   }
 
-  return { createDaily, read, update, list, importNote }
+  function assetPath(userId: string, noteId: string, filename: string) {
+    const { decoded } = notePath(userId, noteId)
+    return path.join(userDirectory(userId), ...decoded.split('/').slice(0, 2), 'assets', validateAssetFilename(filename))
+  }
+
+  async function uploadAsset(userId: string, noteId: string, filename: string, bytes: Uint8Array) {
+    await read(userId, noteId)
+    const file = assetPath(userId, noteId, filename)
+    const root = userDirectory(userId)
+    await rejectSymlinkPath(root, file)
+    await mkdir(path.dirname(file), { recursive: true })
+    await rejectSymlinkPath(root, file)
+    const temporary = `${file}.${randomUUID()}.tmp`
+    try {
+      await writeFile(temporary, bytes, { flag: 'wx' })
+      // Publish only complete files, atomically and without replacement.
+      try { await link(temporary, file) }
+      catch (error: any) {
+        if (error?.code === 'EEXIST') {
+          if (!(await readFile(file)).equals(Buffer.from(bytes))) throw new NotesError('Asset already exists with different content', 409)
+        } else throw error
+      }
+    } finally { await rm(temporary, { force: true }) }
+  }
+
+  async function readAsset(userId: string, noteId: string, filename: string) {
+    const file = assetPath(userId, noteId, filename)
+    await rejectSymlinkPath(userDirectory(userId), file)
+    try { return await readFile(file) }
+    catch (error: any) {
+      if (error?.code === 'ENOENT') throw new NotesError('Asset not found', 404)
+      throw error
+    }
+  }
+
+  return { createDaily, read, update, list, importNote, uploadAsset, readAsset }
 }

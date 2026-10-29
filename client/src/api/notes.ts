@@ -1,4 +1,4 @@
-export type Note = { content: string; ISODateString: string; tags: Array<[string, string]>; revision?: string; backedUpContent?: string }
+export type Note = { content: string; ISODateString: string; tags: Array<[string, string]>; revision?: string; backedUpContent?: string; backedUpId?: string }
 export type SaveResult = string | { id: string; revision?: string }
 export type ImportResult = { id: string; note: Note }
 export type ListQuery = { days?: number; bug?: string }

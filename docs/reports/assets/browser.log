@@ -1,0 +1,58 @@
+Headless Chromium; frontend http://127.0.0.1:5174; API http://127.0.0.1:45917; temporary filesystem only.
+GET /api/v1beta/auth/session -> 200
+GET /api/v1beta/auth/session -> 200
+Verified exact download bytes: binary [sample].bin (7 bytes)
+Verified exact download bytes: no-extension (0 bytes)
+Verified exact download bytes: unsafe.html (39 bytes)
+Verified exact download bytes: binary [sample].bin (7 bytes)
+PASS: anonymous multiple types, duplicate names, cursor insertion, browser persistence, reload, offline, 320px layout.
+GET /api/v1beta/auth/session -> 200
+GET /api/v1beta/auth/session -> 200
+POST /api/v1beta/auth/fake-login -> 200
+POST /api/v1beta/notes/import -> 201
+PUT /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md/assets/1341bff5-06fa-4e03-a910-a9cf6e938782-archive.bin -> 201
+PUT /api/v1beta/notes/daily -> 201
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-1.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-3.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-4.md -> 200
+Verified exact download bytes: archive.bin (7 bytes)
+GET /api/v1beta/auth/session -> 200
+GET /api/v1beta/auth/session -> 200
+PUT /api/v1beta/notes/daily -> 201
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-1.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-3.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-4.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md/assets/1341bff5-06fa-4e03-a910-a9cf6e938782-archive.bin -> 200
+Verified exact download bytes: archive.bin (7 bytes)
+Verified exact download bytes: archive.bin (7 bytes)
+GET /api/v1beta/notes -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md -> 200
+GET /api/v1beta/notes -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md -> 200
+Verified exact download bytes: archive.bin (7 bytes)
+PASS: historical-month filesystem path, collision-free note import with unchanged relative link, second-device fetch/cache/offline, All notes downloads, dark theme.
+PUT /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md/assets/fecb9735-b7c7-4182-a2cd-1ef48119b7db-authenticated.data -> 201
+POST /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md -> 200
+Verified exact download bytes: authenticated.data (7 bytes)
+PASS: authenticated upload from Preview and exact downloaded bytes.
+GET /api/v1beta/auth/session -> 200
+GET /api/v1beta/auth/session -> 200
+GET /api/v1beta/notes -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-1.md -> 404
+CONSOLE ERROR: Failed to load resource: the server responded with a status of 404 (Not Found)
+PUT /api/v1beta/notes/daily -> 201
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-1.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-2.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-3.md -> 200
+GET /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-4.md -> 200
+PUT /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-1.md/assets/e7e8238d-2e97-4aa9-be1e-c9a6d6373795-recoverable.bin -> 503
+CONSOLE ERROR: Failed to load resource: the server responded with a status of 503 (Service Unavailable)
+POST /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-1.md -> 200
+Verified exact download bytes: recoverable.bin (7 bytes)
+POST /api/v1beta/auth/logout -> 200
+POST /api/v1beta/auth/fake-login -> 200
+PUT /api/v1beta/notes/2001%2Fjanuary.d%2Fworkspaces-2001-01-01%2Fworkspace-1.md/assets/e7e8238d-2e97-4aa9-be1e-c9a6d6373795-recoverable.bin -> 201
+PUT /api/v1beta/notes/daily -> 201
+PASS: quota/size failures insert no broken links; server failure preserves browser bytes/link; next login retries successfully.

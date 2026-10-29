@@ -43,7 +43,15 @@ export default defineComponent({
     })
   },
   beforeUnmount() { this.view?.destroy() },
-  methods: { focus() { this.view?.focus() } },
+  methods: {
+    focus() { this.view?.focus() },
+    insert(text: string) {
+      if (!this.view || this.readonly) return false
+      this.view.dispatch(this.view.state.replaceSelection(text))
+      this.view.focus()
+      return true
+    },
+  },
   watch: {
     modelValue(value: string) {
       if (!this.view || value === this.view.state.doc.toString()) return

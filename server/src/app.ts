@@ -5,12 +5,14 @@ import { authRoutes, sessionUser } from './routes/auth/index.js'
 import { dailyRoutes } from './routes/daily/index.js'
 import { healthRoutes } from './routes/health/index.js'
 import { noteRoutes } from './routes/notes/index.js'
+import { assetRoutes } from './routes/assets/index.js'
+import type { AssetsData } from './data-modules/assets-data.js'
 import { createAuthService, type AuthService } from './services/auth-service.js'
 import { createAzureNotesData } from './data-modules/azure-notes-data.js'
 import { createFileNotesData } from './data-modules/file-notes-data.js'
 import { NotesError, type NotesData } from './data-modules/notes-data.js'
 
-export function createApp(config: AppConfig, injectedNotesData?: NotesData, injectedAuth?: AuthService) {
+export function createApp(config: AppConfig, injectedNotesData?: NotesData & Partial<AssetsData>, injectedAuth?: AuthService) {
   const app = new Hono<{ Variables: { userId: string } }>()
   const notesData = injectedNotesData ?? (config.storage.module === 'azure'
     ? createAzureNotesData(config.storage.azure)
@@ -38,6 +40,7 @@ export function createApp(config: AppConfig, injectedNotesData?: NotesData, inje
     await next()
   })
   app.route(`${apiPath}/notes/daily`, dailyRoutes(notesData))
+  app.route(`${apiPath}/notes`, assetRoutes(notesData))
   app.route(`${apiPath}/notes`, noteRoutes(notesData))
   app.notFound(c => c.json({ error: 'Not found' }, 404))
   app.onError((error, c) => {

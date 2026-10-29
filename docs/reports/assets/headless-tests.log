@@ -1,0 +1,18 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90m/home/tom/workspace/tomklino/katavti[39m
+
+ [32m✓[39m server/test/e2e/assets.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 777[2mms[22m[39m
+[90mstdout[2m | server/test/e2e/assets-browser.test.ts
+[22m[39mPort 5173 is in use, trying another one...
+
+ [32m✓[39m server/test/e2e/assets-browser.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 21324[2mms[22m[39m
+   [32m✓[39m headless asset acceptance tests [2m(3)[22m
+     [33m[2m✓[22m[39m uploads any type, inserts at cursor, persists exact bytes, downloads after reload and offline, and stays usable on mobile[33m 4823[2mms[22m[39m
+     [33m[2m✓[22m[39m backs up anonymous assets to a collision-free imported note in its historical month and caches downloads on another device[33m 9122[2mms[22m[39m
+     [33m[2m✓[22m[39m shows storage and size failures without broken links, and keeps local downloads when server upload fails[33m 6590[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m   Start at [22m 23:03:35
+[2m   Duration [22m 22.91s[2m (tests 91%, import 8%, transform 1%)[22m
+

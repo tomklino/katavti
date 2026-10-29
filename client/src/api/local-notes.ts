@@ -1,4 +1,5 @@
 import type { ListQuery, Note, NotesApi } from './notes'
+import { backUpNoteAssets } from './assets'
 
 const storageKey = 'katavti.notes.v1'
 type StoredNotes = Record<string, Note>
@@ -67,7 +68,13 @@ export function createLocalNotesApi(storage: Storage = localStorage): NotesApi {
   }
 }
 
-export async function backUpLocalNotes(remote: NotesApi, storage: Storage = localStorage) {
+export async function backUpStoredAssets(owner: string, storage: Storage = localStorage) {
+  for (const [id, note] of Object.entries(readStorage(storage))) {
+    await backUpNoteAssets(note.backedUpId || id, note.content, owner, id)
+  }
+}
+
+export async function backUpLocalNotes(remote: NotesApi, storage: Storage = localStorage, owner = '') {
   const entries = Object.entries(readStorage(storage)).filter(([, note]) =>
     note.content.length > 0 && !note.revision && note.backedUpContent !== note.content)
   let count = 0
@@ -76,13 +83,17 @@ export async function backUpLocalNotes(remote: NotesApi, storage: Storage = loca
     // Persist progress after each successful import. Keep the original local
     // draft until account reload succeeds, and don't repeat completed imports.
     const notes = readStorage(storage)
-    if (notes[id]) notes[id].backedUpContent = note.content
+    if (notes[id]) {
+      notes[id].backedUpContent = note.content
+      notes[id].backedUpId = imported.id
+    }
     // Server IDs are collision-free on the server, not necessarily in this
     // browser. Never replace a different pending local draft while importing.
     if (!notes[imported.id]) notes[imported.id] = imported.note
     writeStorage(storage, notes)
     count++
   }
+  if (owner) await backUpStoredAssets(owner, storage)
   return count
 }
 

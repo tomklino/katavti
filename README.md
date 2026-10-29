@@ -78,6 +78,28 @@ KATAVTI_UI_URL=http://localhost:8082 node scripts/ui-review.mjs
 
 The script uses a fresh, anonymous browser context, creates 12 mock notes through the editor, verifies persistence, theme preferences, expanded reading, non-scrolling Daily, header pagination, label filtering, and short/long label sizing from 320–1440px, and captures eleven views per theme (including the lookback menu and mobile labels). It does not touch your real browser notes or API notes. Set `CHROME_PATH` if Chrome is not in its standard location. The generated `final-light-*.png` and `final-dark-*.png` screenshots, mock-note export, and comparison gallery are in the Git-ignored `.ui-review/` directory; open `.ui-review/index.html` to compare them. Earlier prototype screenshots remain alongside them.
 
+### Note attachments
+
+In **Daily**, click **Attach** to select one or more files of any type (up to 50 MiB per file). In Raw mode the Markdown link is inserted at the cursor; in Preview it is appended. Click the link in Preview, including in **All notes**, to download the original file. Duplicate filenames receive different UUIDs.
+
+Assets are stored as binary Blobs in browser IndexedDB (`katavti.assets.v1`), alongside the existing localStorage notes. Anonymous assets stay in this browser until login backs up their notes and files. Authenticated uploads save locally and through the API. On another device, clicking a link downloads and caches the asset for subsequent offline use. Clearing browser site data removes the local copies.
+
+On the filesystem, attachments live in the **note's month**, not the current upload month:
+
+```text
+<storage.dataDir>/<email>/2001/january.d/
+  workspaces-2001-01-01/workspace-2.md
+  assets/<uuid>-document.pdf
+```
+
+Notes contain portable relative links such as `[document.pdf](../assets/<uuid>-document.pdf)`. Downloads are deliberately served as attachments, not executable HTML/SVG or inline previews. If a server upload fails, the link and file remain available locally with a warning; logging in again retries the backup. Browser quota/size errors do not insert a broken link.
+
+The authenticated binary API uses `PUT` and `GET /api/v1beta/notes/<encoded-note-id>/assets/<uuid-filename>`. See the [implementation and test report](docs/reports/assets/REPORT.md) for the API contract, sequence diagram, screenshots, and logs. Reproduce the isolated, local-only headless tests using installed Chrome:
+
+```sh
+PLAYWRIGHT_CHANNEL=chrome npx vitest run server/test/e2e/assets.test.ts server/test/e2e/assets-browser.test.ts
+```
+
 ### Local Kubernetes with K3s
 
 K3s is a small Kubernetes distribution and includes the Traefik Ingress controller. On Linux, install it and create a user-readable kubectl configuration:

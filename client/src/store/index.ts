@@ -50,7 +50,7 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
       async completeLogin({ state, commit, dispatch }, user: User) {
         commit('setUser', user); commit('setStorageWarning', false); commit('setBackupStatus', 'Backing up local notes…')
         try {
-          const count = await backUpLocalNotes(remoteApi, storage)
+          const count = await backUpLocalNotes(remoteApi, storage, user.email)
           commit('setBackupStatus', count ? `${count} local note${count === 1 ? '' : 's'} backed up.` : '')
           if (state.dailyIds.length) await dispatch('loadDaily', state.dailyIds.length)
           else await dispatch('loadNotes')
@@ -59,11 +59,20 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
           throw error
         }
       },
-      async initializeAuth({ commit, dispatch }) {
+      async initializeAuth({ state, commit, dispatch }) {
         const token = new URLSearchParams(location.search).get('token')
         const result = token ? await authApi.verifyMagicLink(token) : await authApi.session()
         if (token && result.user) await dispatch('completeLogin', result.user)
-        else commit('setUser', result.user)
+        else {
+          commit('setUser', result.user)
+          // Route creation can load browser notes before the session request
+          // finishes. Refresh after authentication so another device sees its
+          // remote notes (and their asset links) on the first page load.
+          if (result.user) {
+            if (state.dailyIds.length) await dispatch('loadDaily', state.dailyIds.length)
+            else await dispatch('loadNotes')
+          }
+        }
         if (token) history.replaceState({}, '', location.pathname)
       },
       async googleLogin({ dispatch }, credential: string) { const { user } = await authApi.google(credential); await dispatch('completeLogin', user) },
