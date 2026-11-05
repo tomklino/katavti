@@ -33,6 +33,7 @@
         ansible_host: "{{ katavti_existing_host }}"
         ansible_user: "{{ katavti_existing_user }}"
         ansible_port: "{{ katavti_ssh_port }}"
+        ansible_python_interpreter: auto_silent
         katavti_client_image: "{{ katavti_images_client_reference }}"
         katavti_server_image: "{{ katavti_images_server_reference }}"
 
