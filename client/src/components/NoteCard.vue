@@ -1,5 +1,5 @@
 <template>
-  <article class="note" :class="{ active, browsing }" @click="$emit('activate')">
+  <article class="note" :class="{ active, browsing, unsaved }" @click="$emit('activate')">
     <header :tabindex="active ? -1 : 0" :role="active ? undefined : 'button'" :aria-expanded="active" @keydown.enter.self.prevent="$emit('activate')" @keydown.space.self.prevent="$emit('activate')">
       <span class="note-number" aria-hidden="true">{{ (index + 1).toString().padStart(2, '0') }}</span>
       <div class="note-heading"><strong>{{ title }}</strong><time v-if="active">{{ formattedDate }}<span> / {{ editable ? 'Daily note' : 'From your notebook' }}</span></time></div>
@@ -26,7 +26,7 @@
       </div>
     </div>
     <div class="note-body" :aria-hidden="!active">
-      <MarkdownEditor v-if="raw" ref="editor" :class="{ unsaved }" :model-value="note.content" :readonly="!editable" :aria-label="`Edit ${title}`" @update:model-value="edit" />
+      <MarkdownEditor v-if="raw" ref="editor" :model-value="note.content" :readonly="!editable" :aria-label="`Edit ${title}`" @update:model-value="edit" />
       <div v-else class="rendered" @click="openAsset" v-html="rendered" />
     </div>
     <footer v-if="active" class="note-footer"><span>{{ wordCount }} words <span class="footer-separator">/</span> Markdown</span><span class="save-state" :class="{ pending: unsaved }" role="status"><span />{{ saveError ? 'Not saved' : unsaved ? 'Saving changes…' : editable ? 'All changes saved' : 'Read-only · open Daily to write' }}</span></footer>
@@ -214,6 +214,7 @@ export default defineComponent({
 }
 .note:hover { border-color: var(--muted); }
 .note.active { background: var(--surface); border-color: var(--active-line); box-shadow: var(--note-shadow); cursor: default; flex: 1 1 0; min-height: 0; }
+.note.unsaved, .note.active.unsaved { border-left-color: #dc2626; }
 .note.browsing { flex: 0 0 auto; min-height: 0; overflow: visible; }
 header { align-items: center; display: flex; flex-shrink: 0; gap: 12px; min-height: 26px; padding: 0 14px; }
 .note.active header { border-bottom: 1px solid var(--line); min-height: 48px; }
@@ -244,8 +245,7 @@ time span { opacity: .8; }
 .note-body { display: none; min-height: 0; overflow: auto; }
 .note.active .note-body { display: block; flex: 1; }
 .note.browsing .note-body { flex: 0 0 auto; overflow: visible; }
-.markdown-editor { border: 2px solid transparent; box-sizing: border-box; }
-.markdown-editor.unsaved { border-style: dashed; border-color: #d97706; }
+.markdown-editor { box-sizing: border-box; }
 .rendered { box-sizing: border-box; font-family: var(--reading-font); font-size: 14px; line-height: 1.65; margin: 0; max-width: 900px; padding: 0 20px 16px; text-align: left; }
 .note-footer { align-items: center; border-top: 1px solid var(--line); color: var(--muted); display: flex; flex-shrink: 0; font-size: 9px; justify-content: space-between; padding: 6px 14px; }
 .footer-separator { margin: 0 7px; opacity: .6; }

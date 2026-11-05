@@ -199,14 +199,16 @@ describe('NoteCard focus states', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('shows an unsaved editor border until persistence finishes', async () => {
+  it('marks the note left line red until persistence finishes', async () => {
     const wrapper = mountCard(true)
+    expect(wrapper.find('.note').classes()).not.toContain('unsaved')
     expect(wrapper.find('.markdown-editor').classes()).not.toContain('unsaved')
     wrapper.vm.$store.commit('setNoteUnsaved', { id: 'note-1', value: true })
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('.markdown-editor').classes()).toContain('unsaved')
+    expect(wrapper.find('.note').classes()).toContain('unsaved')
+    expect(wrapper.find('.markdown-editor').classes()).not.toContain('unsaved')
     wrapper.vm.$store.commit('setNoteUnsaved', { id: 'note-1', value: false })
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('.markdown-editor').classes()).not.toContain('unsaved')
+    expect(wrapper.find('.note').classes()).not.toContain('unsaved')
   })
 })
