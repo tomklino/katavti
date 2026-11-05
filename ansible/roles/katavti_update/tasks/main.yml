@@ -80,6 +80,9 @@
     owner: root
     group: root
     mode: "0644"
+  vars:
+    katavti_client_container_name: "{{ katavti_update_client_container }}"
+    katavti_server_container_name: "{{ katavti_update_server_container }}"
 
 - name: Start and verify the updated inactive slot
   block:
