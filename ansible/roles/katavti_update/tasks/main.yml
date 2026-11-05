@@ -1,0 +1,250 @@
+---
+- name: Validate existing deployment update settings
+  ansible.builtin.assert:
+    that:
+      - katavti_client_image | length > 0
+      - katavti_server_image | length > 0
+      - katavti_domain_name | length > 0
+      - katavti_shared_network_name | length > 0
+      - katavti_shared_caddy_project_dir.startswith('/')
+      - katavti_shared_caddy_routes_dir.startswith('/')
+    fail_msg: Configure the immutable images, hostname, shared Docker network, and Caddy paths.
+
+- name: Read the existing Katavti system user and group IDs
+  ansible.builtin.command: "id -u {{ katavti_system_user }}"
+  register: katavti_update_uid_result
+  changed_when: false
+
+- name: Read the existing Katavti system group ID
+  ansible.builtin.command: "id -g {{ katavti_system_user }}"
+  register: katavti_update_gid_result
+  changed_when: false
+
+- name: Publish existing Katavti user and group IDs
+  ansible.builtin.set_fact:
+    katavti_system_uid: "{{ katavti_update_uid_result.stdout }}"
+    katavti_system_gid: "{{ katavti_update_gid_result.stdout }}"
+
+- name: Verify the existing shared proxy network
+  ansible.builtin.command:
+    argv: [docker, network, inspect, "{{ katavti_shared_network_name }}"]
+  changed_when: false
+
+- name: Read the active deployment slot
+  ansible.builtin.slurp:
+    src: "{{ katavti_state_file }}"
+  register: katavti_update_active_slot_file
+  failed_when: false
+  changed_when: false
+
+- name: Select the inactive update slot
+  ansible.builtin.set_fact:
+    katavti_update_active_slot: "{{ katavti_update_active_slot_file.content | default('') | b64decode | trim }}"
+    katavti_update_candidate_slot: >-
+      {{ 'green' if (katavti_update_active_slot_file.content | default('') | b64decode | trim) == 'blue' else 'blue' }}
+
+- name: Require an already initialized blue-green deployment
+  ansible.builtin.assert:
+    that:
+      - katavti_update_active_slot in ['blue', 'green']
+    fail_msg: No active Katavti slot was found; use the full site.yml deployment first.
+
+- name: Define update slot paths and names
+  ansible.builtin.set_fact:
+    katavti_update_candidate_dir: "{{ katavti_releases_dir }}/{{ katavti_update_candidate_slot }}"
+    katavti_update_candidate_route: "{{ katavti_staging_dir }}/katavti.{{ katavti_update_candidate_slot }}.update"
+    katavti_update_client_container: "katavti-{{ katavti_update_candidate_slot }}-client"
+    katavti_update_server_container: "katavti-{{ katavti_update_candidate_slot }}-server"
+    katavti_update_route: "{{ katavti_shared_caddy_routes_dir }}/katavti.caddy"
+    katavti_update_previous_route: "{{ katavti_staging_dir }}/katavti.update.previous"
+
+- name: Verify the existing slot directory and configuration exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ katavti_update_candidate_dir }}"
+    - "{{ katavti_config_dir }}/production.yaml"
+    - "{{ katavti_config_dir }}/secrets.yaml"
+  register: katavti_update_existing_paths
+
+- name: Require the existing deployment layout
+  ansible.builtin.assert:
+    that:
+      - katavti_update_existing_paths.results | selectattr('stat.exists', 'equalto', false) | list | length == 0
+    fail_msg: The existing Katavti deployment layout is incomplete; use site.yml instead.
+
+- name: Render the update Compose project using only the new images
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ katavti_update_candidate_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start and verify the updated inactive slot
+  block:
+    - name: Pull and recreate only the inactive slot
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --project-name
+          - "katavti-{{ katavti_update_candidate_slot }}"
+          - --project-directory
+          - "{{ katavti_update_candidate_dir }}"
+          - up
+          - --detach
+          - --pull
+          - always
+          - --force-recreate
+          - --wait
+      changed_when: true
+
+    - name: Verify updated candidate API internally
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - --network
+          - "{{ katavti_shared_network_name }}"
+          - curlimages/curl:8.16.0
+          - --fail
+          - --silent
+          - --show-error
+          - "http://{{ katavti_update_server_container }}:{{ katavti_server_port }}{{ katavti_api_base_path }}/health"
+      register: katavti_update_api
+      changed_when: false
+      retries: "{{ katavti_health_retries }}"
+      delay: "{{ katavti_health_delay }}"
+      until: katavti_update_api.rc == 0
+
+    - name: Verify updated candidate client internally
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - --network
+          - "{{ katavti_shared_network_name }}"
+          - curlimages/curl:8.16.0
+          - --fail
+          - --silent
+          - --show-error
+          - "http://{{ katavti_update_client_container }}:{{ katavti_client_port }}/"
+      changed_when: false
+
+  rescue:
+    - name: Stop the failed update slot
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --project-name
+          - "katavti-{{ katavti_update_candidate_slot }}"
+          - --project-directory
+          - "{{ katavti_update_candidate_dir }}"
+          - down
+          - --remove-orphans
+      changed_when: true
+      failed_when: false
+
+    - name: Report update candidate failure
+      ansible.builtin.fail:
+        msg: The new images failed internal health checks; the active slot was not changed.
+
+- name: Render the candidate Caddy route
+  ansible.builtin.template:
+    src: katavti.caddy.j2
+    dest: "{{ katavti_update_candidate_route }}"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    katavti_candidate_slot: "{{ katavti_update_candidate_slot }}"
+    katavti_client_container_name: "{{ katavti_update_client_container }}"
+    katavti_server_container_name: "{{ katavti_update_server_container }}"
+
+- name: Activate the verified updated slot
+  block:
+    - name: Preserve the current route
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ katavti_update_route }}"
+        dest: "{{ katavti_update_previous_route }}"
+        mode: preserve
+
+    - name: Install the updated route
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ katavti_update_candidate_route }}"
+        dest: "{{ katavti_update_route }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Validate shared Caddy configuration
+      ansible.builtin.command:
+        argv: [docker, compose, --project-directory, "{{ katavti_shared_caddy_project_dir }}", exec, -T, "{{ katavti_shared_caddy_service }}", caddy, validate, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+      changed_when: false
+
+    - name: Gracefully reload shared Caddy
+      ansible.builtin.command:
+        argv: [docker, compose, --project-directory, "{{ katavti_shared_caddy_project_dir }}", exec, -T, "{{ katavti_shared_caddy_service }}", caddy, reload, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+      changed_when: true
+
+    - name: Verify the public updated API
+      ansible.builtin.uri:
+        url: "https://{{ katavti_domain_name }}{{ katavti_api_base_path }}/health"
+        status_code: 200
+        validate_certs: true
+      register: katavti_update_public_api
+      retries: "{{ katavti_health_retries }}"
+      delay: "{{ katavti_health_delay }}"
+      until: katavti_update_public_api.status == 200
+
+    - name: Verify the public updated client
+      ansible.builtin.uri:
+        url: "https://{{ katavti_domain_name }}/"
+        status_code: 200
+        validate_certs: true
+
+    - name: Record the new active slot
+      ansible.builtin.copy:
+        content: "{{ katavti_update_candidate_slot }}\n"
+        dest: "{{ katavti_state_file }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+  rescue:
+    - name: Restore the previous route
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ katavti_update_previous_route }}"
+        dest: "{{ katavti_update_route }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload restored Caddy configuration
+      ansible.builtin.command:
+        argv: [docker, compose, --project-directory, "{{ katavti_shared_caddy_project_dir }}", exec, -T, "{{ katavti_shared_caddy_service }}", caddy, reload, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+      changed_when: true
+
+    - name: Stop the failed update slot after rollback
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --project-name
+          - "katavti-{{ katavti_update_candidate_slot }}"
+          - --project-directory
+          - "{{ katavti_update_candidate_dir }}"
+          - stop
+      changed_when: true
+      failed_when: false
+
+    - name: Report rolled-back update failure
+      ansible.builtin.fail:
+        msg: The updated slot failed public verification; the prior route was restored.

@@ -1,0 +1,44 @@
+---
+- name: Build and publish the tagged Katavti update images
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: katavti_images
+      vars:
+        katavti_images_build_missing: true
+
+- name: Select the existing Katavti host for an image-only update
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Require an explicitly configured target
+      ansible.builtin.assert:
+        that:
+          - katavti_existing_host | default('') is match('^(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])){3}$')
+          - katavti_existing_user | default('') | length > 0
+        fail_msg: Set katavti_existing_host and katavti_existing_user in the private inventory.
+
+    - name: Select the immutable image references from the tagged checkout
+      ansible.builtin.include_role:
+        name: katavti_images
+      vars:
+        katavti_images_build_missing: false
+
+    - name: Add the existing deployment host
+      ansible.builtin.add_host:
+        name: katavti_update_target
+        groups: katavti_update_hosts
+        ansible_host: "{{ katavti_existing_host }}"
+        ansible_user: "{{ katavti_existing_user }}"
+        ansible_port: "{{ katavti_ssh_port }}"
+        katavti_client_image: "{{ katavti_images_client_reference }}"
+        katavti_server_image: "{{ katavti_images_server_reference }}"
+
+- name: Replace images in the existing Katavti blue-green deployment
+  hosts: katavti_update_hosts
+  become: true
+  gather_facts: false
+  roles:
+    - role: katavti_update

@@ -1,0 +1,40 @@
+---
+katavti_base_dir: /opt/katavti
+katavti_releases_dir: "{{ katavti_base_dir }}/releases"
+katavti_config_dir: "{{ katavti_base_dir }}/config"
+katavti_staging_dir: "{{ katavti_base_dir }}/staging"
+katavti_state_file: "{{ katavti_base_dir }}/active-slot"
+katavti_shared_network_name: bifrost-stack_default
+katavti_shared_caddy_project_dir: /opt/bifrost-stack
+katavti_shared_caddy_routes_dir: "{{ katavti_shared_caddy_project_dir }}/caddy/caddy.d"
+katavti_shared_caddy_service: caddy
+katavti_domain_name: ""
+katavti_api_base_path: /api/v1beta
+katavti_server_port: 3030
+katavti_client_port: 8080
+katavti_health_retries: 12
+katavti_health_delay: 5
+katavti_container_data_dir: /data
+katavti_data_dir: /var/lib/katavti/notes
+katavti_system_user: katavti
+katavti_system_uid: ""
+katavti_system_gid: ""
+katavti_azure_storage_enabled: true
+katavti_azure_storage_name: katavti-notes
+katavti_sessions_module: filesystem
+katavti_sessions_lazy: true
+katavti_sessions_cache: true
+katavti_cors_origins:
+  - "https://{{ katavti_domain_name }}"
+katavti_identity_header_name: x-user-id
+katavti_magic_link_base_url: "https://{{ katavti_domain_name }}"
+katavti_mail_from: "Katavti <no-reply@{{ katavti_domain_name }}>"
+katavti_key_vault_name: ""
+katavti_key_vault_managed_identity_client_id: ""
+katavti_key_vault_google_client_id_secret: katavti-google-client-id
+katavti_smtp_mode: disabled
+katavti_key_vault_smtp_url_secret: katavti-smtp-url
+katavti_key_vault_smtp_oauth_user_secret: katavti-smtp-oauth-user
+katavti_key_vault_smtp_oauth_client_id_secret: katavti-smtp-oauth-client-id
+katavti_key_vault_smtp_oauth_client_secret_secret: katavti-smtp-oauth-client-secret
+katavti_key_vault_smtp_oauth_refresh_token_secret: katavti-smtp-oauth-refresh-token

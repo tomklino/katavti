@@ -37,3 +37,29 @@ Create a release tag, then explicitly run `build-images.yml` to publish missing 
 Azure notes storage is enabled by default with container name `katavti-notes`. Ansible discovers the subscription and deployment VM from the configured public IP, derives a globally unique storage-account name, and uses the VM's single user-assigned managed identity. It creates the storage account and container, grants the identity the **Storage Blob Data Contributor** role, and configures Katavti and its Key Vault access to use it. Set `katavti_azure_storage_enabled: false` to retain filesystem storage.
 
 For Gmail OAuth2 delivery, set `katavti_smtp_mode: gmail_oauth2` and store the mailbox, OAuth client ID, OAuth client secret, and refresh token in `katavti-smtp-oauth-user`, `katavti-smtp-oauth-client-id`, `katavti-smtp-oauth-client-secret`, and `katavti-smtp-oauth-refresh-token`. The legacy SMTP URL mode remains available as `katavti_smtp_mode: url`. Running deployment is intentionally outside local validation.
+
+## Update an existing deployment
+
+For a normal application release, use `playbooks/update.yml` instead of `site.yml`. It requires an existing initialized Katavti blue-green deployment and only:
+
+1. verifies the selected Git tag and clean checkout;
+2. builds and publishes the immutable client and server images;
+3. reads the existing active slot on the target;
+4. pulls and recreates only the inactive slot with the new images;
+5. verifies the candidate over the shared Docker network;
+6. switches the existing Katavti Caddy route, validates/reloads Caddy, and checks the public endpoints;
+7. rolls back the route and stops the candidate if public verification fails.
+
+It does not discover or provision Azure resources, manage DNS, migrate data, fetch Key Vault configuration, or alter the existing storage and secrets. Those must already exist from the initial deployment. The existing active slot is retained for rollback.
+
+From the repository root, after checking out the new release tag:
+
+```bash
+ANSIBLE_CONFIG=ansible/ansible.cfg ansible/.venv/bin/ansible-galaxy collection install -r ansible/requirements.yml
+ANSIBLE_CONFIG=ansible/ansible.cfg ansible/.venv/bin/ansible-playbook \\
+  -i /home/tom/katavti-inventory/hosts.yml \\
+  -e @/home/tom/katavti-inventory/group_vars/all.yml \\
+  ansible/playbooks/update.yml
+```
+
+The update playbook still needs Azure CLI access during the image build because the client image obtains its Google client ID from Key Vault. It does not require Google Cloud DNS credentials.
