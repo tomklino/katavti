@@ -80,7 +80,17 @@ The script uses a fresh, anonymous browser context, creates 12 mock notes throug
 
 ### Note attachments
 
-In **Daily**, click **Attach** to select one or more files of any type (up to 50 MiB per file). In Raw mode the Markdown link is inserted at the cursor; in Preview it is appended. Click the link in Preview, including in **All notes**, to download the original file. Duplicate filenames receive different UUIDs.
+In **Daily**, click **Attach** to select one or more files of any type (up to 50 MiB per file). Upload status appears immediately with the filename, file count, and progress; authenticated uploads report the percentage of bytes sent and show when server storage is finishing. The editor stays usable. If the note changes during upload (even if the edits are undone), the uploaded file is held behind an **Attach link** button instead of being inserted automatically. In Raw mode automatic insertion or clicking **Attach link** inserts at the current cursor; in Preview it appends. Pictures use Markdown image syntax and display in Preview; other files use plain links. Click a link in Preview, including in **All notes**, to download the original file. Duplicate filenames receive different UUIDs.
+
+To test upload feedback and editing during fast local uploads, enable a minimum duration per file (milliseconds):
+
+```sh
+VITE_DEV_ASSET_MIN_DURATION_MS=5000 npm --prefix client run dev
+# Or start both frontend and backend:
+VITE_DEV_ASSET_MIN_DURATION_MS=5000 KATAVTI_STORAGE_DATA_DIR="$HOME/notes" npm run dev
+```
+
+This opt-in setting works only in Vite development mode and is ignored in production builds. Both anonymous and authenticated uploads remain pending for at least five seconds before inserting Markdown or showing **Attach link**. Real byte progress is unchanged; any remaining simulated delay displays “Finishing upload”. Uploads already taking longer than the minimum get no extra delay. Storage and size errors still appear immediately. Unset the variable or set it to `0` to disable the simulation.
 
 Assets are stored as binary Blobs in browser IndexedDB (`katavti.assets.v1`), alongside the existing localStorage notes. Anonymous assets stay in this browser until login backs up their notes and files. Authenticated uploads save locally and through the API. On another device, clicking a link downloads and caches the asset for subsequent offline use. Clearing browser site data removes the local copies.
 
@@ -92,7 +102,7 @@ On the filesystem, attachments live in the **note's month**, not the current upl
   assets/<uuid>-document.pdf
 ```
 
-Notes contain portable relative links such as `[document.pdf](../assets/<uuid>-document.pdf)`. Downloads are deliberately served as attachments, not executable HTML/SVG or inline previews. If a server upload fails, the link and file remain available locally with a warning; logging in again retries the backup. Browser quota/size errors do not insert a broken link.
+Notes contain portable relative links such as `[document.pdf](../assets/<uuid>-document.pdf)` or `![photo.png](../assets/<uuid>-photo.png)`. API downloads are deliberately served as attachments, not executable HTML/SVG or inline pages. Image Preview resolves those bytes to browser Blob URLs and caches them for offline use. If a server upload fails, the link and file remain available locally with a warning; logging in again retries the backup. Browser quota/size errors do not insert a broken link.
 
 The authenticated binary API uses `PUT` and `GET /api/v1beta/notes/<encoded-note-id>/assets/<uuid-filename>`. See the [implementation and test report](docs/reports/assets/REPORT.md) for the API contract, sequence diagram, screenshots, and logs. Reproduce the isolated, local-only headless tests using installed Chrome:
 

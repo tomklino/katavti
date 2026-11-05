@@ -181,6 +181,52 @@ describe('headless asset acceptance tests', () => {
     logs.push('PASS: authenticated upload from Preview and exact downloaded bytes.')
   }, 45_000)
 
+  it('shows upload progress, defers insertion after typing, and displays image attachments across devices and offline', async () => {
+    const page = await device()
+    const email = 'assets-progress@example.com'
+    await page.request.post(`${origin}/api/v1beta/auth/fake-login`, { data: { email } })
+    await page.reload(); await editor(page).waitFor()
+    await editor(page).fill('# Image progress\nOriginal draft')
+    await saved(page)
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    await page.route('**/assets/*', async route => {
+      if (route.request().method() === 'PUT') await gate
+      await route.continue()
+    })
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
+    try {
+      await input(page).setInputFiles(fixture('picture.png', png, 'image/png'))
+      await page.locator('.asset-progress').waitFor()
+      expect(await page.locator('.asset-progress').innerText()).toContain('picture.png')
+      expect(await page.locator('.asset-progress').innerText()).toContain('1 of 1 files')
+      await editor(page).fill('# Image progress\nTyped while uploading')
+      release()
+      await page.getByRole('button', { name: 'Attach link', exact: true }).waitFor()
+      expect(await editor(page).innerText()).toBe('# Image progress\nTyped while uploading')
+      await page.getByRole('button', { name: 'Attach link', exact: true }).click()
+      await saved(page)
+      expect(await editor(page).innerText()).toContain('![picture.png](../assets/')
+      await preview(page)
+      const image = page.locator('.note.active .rendered img')
+      await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(1)
+      expect(await image.getAttribute('src')).toMatch(/^blob:/)
+      await page.reload(); await editor(page).waitFor(); await preview(page)
+      await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(1)
+      const other = await device()
+      await other.request.post(`${origin}/api/v1beta/auth/fake-login`, { data: { email } })
+      await other.reload(); await editor(other).waitFor(); await preview(other)
+      const otherImage = other.locator('.note.active .rendered img')
+      await expect.poll(() => otherImage.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(1)
+      await other.context().setOffline(true)
+      await other.locator('.note.active .raw-toggle input').check()
+      await preview(other)
+      await expect.poll(() => otherImage.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(1)
+      await other.context().setOffline(false)
+      logs.push('PASS: immediate file/progress feedback, editing during upload defers to Attach link, Markdown images, reload, second-device image fetch/cache, offline image Preview.')
+    } finally { release(); await page.unroute('**/assets/*') }
+  }, 45_000)
+
   it('shows storage and size failures without broken links, and keeps local downloads when server upload fails', async () => {
     const page = await device()
     await editor(page).fill('# Failure handling')
