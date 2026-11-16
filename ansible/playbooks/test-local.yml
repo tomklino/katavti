@@ -12,6 +12,9 @@
     katavti_server_image: example/katavti-server:v0.2.0
     katavti_server_port: 3030
     katavti_client_port: 8080
+    katavti_server_memory_mb: 256
+    katavti_server_heap_mb: 128
+    katavti_client_memory_mb: 64
     katavti_system_user: katavti
     katavti_system_uid: 991
     katavti_system_gid: 991

@@ -5,6 +5,8 @@ services:
     pull_policy: always
     container_name: "{{ katavti_client_container_name }}"
     restart: unless-stopped
+    mem_limit: "{{ katavti_client_memory_mb }}m"
+    memswap_limit: "{{ katavti_client_memory_mb }}m"
     networks: [proxy]
     healthcheck:
       test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:{{ katavti_client_port }}/"]
@@ -16,8 +18,11 @@ services:
     pull_policy: always
     container_name: "{{ katavti_server_container_name }}"
     restart: unless-stopped
+    mem_limit: "{{ katavti_server_memory_mb }}m"
+    memswap_limit: "{{ katavti_server_memory_mb }}m"
     user: "{{ katavti_system_uid }}:{{ katavti_system_gid }}"
     environment:
+      NODE_OPTIONS: "--max-old-space-size={{ katavti_server_heap_mb }}"
       KATAVTI_CONFIG_FILES: /config/production.yaml
       KATAVTI_CONFIG_SECRET_FILES: /config/secrets.yaml
     volumes:

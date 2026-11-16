@@ -19,6 +19,9 @@ VARS = {
     "katavti_server_image": "example/katavti-server:v0.2.0",
     "katavti_server_port": 3030,
     "katavti_client_port": 8080,
+    "katavti_server_memory_mb": 256,
+    "katavti_server_heap_mb": 128,
+    "katavti_client_memory_mb": 64,
     "katavti_system_uid": 991,
     "katavti_system_gid": 991,
     "katavti_data_dir": "/var/lib/katavti/notes",
@@ -89,6 +92,23 @@ class DeploymentContractTest(unittest.TestCase):
         filesystem = yaml.safe_load(self.render("docker-compose.yml.j2", katavti_azure_storage_enabled=False))
         self.assertIn("/var/lib/katavti/notes:/data", filesystem["services"]["server"]["volumes"])
         self.assertIn("/var/lib/katavti/sessions:/sessions", filesystem["services"]["server"]["volumes"])
+
+    def test_compose_memory_budgets_are_bounded_and_overridable(self):
+        defaults = yaml.safe_load((ROOT / "roles/katavti/defaults/main.yml").read_text())
+        for variable in ["katavti_server_memory_mb", "katavti_server_heap_mb", "katavti_client_memory_mb"]:
+            self.assertEqual(VARS[variable], defaults[variable])
+        for overrides, server_limit, client_limit, heap in [
+            ({}, "256m", "64m", 128),
+            ({"katavti_server_memory_mb": 512, "katavti_client_memory_mb": 96,
+              "katavti_server_heap_mb": 256}, "512m", "96m", 256),
+        ]:
+            with self.subTest(overrides=overrides):
+                services = yaml.safe_load(self.render("docker-compose.yml.j2", **overrides))["services"]
+                self.assertEqual(server_limit, services["server"]["mem_limit"])
+                self.assertEqual(server_limit, services["server"]["memswap_limit"])
+                self.assertEqual(client_limit, services["client"]["mem_limit"])
+                self.assertEqual(client_limit, services["client"]["memswap_limit"])
+                self.assertEqual(f"--max-old-space-size={heap}", services["server"]["environment"]["NODE_OPTIONS"])
 
     def test_production_config_is_complete_and_secrets_are_separate(self):
         config_text = self.render("production.yaml.j2")

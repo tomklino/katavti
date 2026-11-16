@@ -17,6 +17,10 @@ katavti_tls_email: ""
 katavti_api_base_path: /api/v1beta
 katavti_server_port: 3030
 katavti_client_port: 8080
+# Per-container MiB budgets; both blue/green slots can run simultaneously.
+katavti_server_memory_mb: 256
+katavti_server_heap_mb: 128
+katavti_client_memory_mb: 64
 katavti_environment_type: prod
 katavti_sessions_module: filesystem
 katavti_sessions_lazy: true

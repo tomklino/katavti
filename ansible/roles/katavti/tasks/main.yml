@@ -30,9 +30,14 @@
       - not (katavti_azure_storage_enabled | bool) or katavti_azure_storage_name | length > 0
       - not (katavti_azure_storage_enabled | bool) or katavti_azure_storage_account_name is match('^[a-z0-9]{3,24}$')
       - katavti_shared_caddy_routes_dir.startswith('/')
+      - katavti_server_memory_mb is integer and katavti_server_memory_mb > 0
+      - katavti_client_memory_mb is integer and katavti_client_memory_mb > 0
+      - katavti_server_heap_mb is integer and katavti_server_heap_mb > 0
+      - katavti_server_heap_mb < katavti_server_memory_mb
     fail_msg: >-
       Configure the hostname, TLS email, immutable images, data directory,
-      and shared Caddy paths.
+      shared Caddy paths, and positive integer memory budgets in MiB.
+      The Node old-space cap must be smaller than the server container limit.
 
 - name: Verify the existing shared proxy network without changing it
   ansible.builtin.command:

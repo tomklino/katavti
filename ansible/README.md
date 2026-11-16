@@ -30,6 +30,28 @@ cd ansible
 
 `test-local.yml` only renders files under `ansible/.test-output` and runs `docker compose config`; it does not start containers or contact a server. `site.yml` uses the Google Cloud collection to manage DNS without invoking a cloud CLI.
 
+## Memory budgets
+
+Compose enforces per-container limits using `katavti_server_memory_mb: 256` and
+`katavti_client_memory_mb: 64` (MiB). The matching `memswap_limit` values disable
+container swap. `katavti_server_heap_mb: 128` sets Node's old-space cap, not its
+total memory limit; the remaining budget covers young-generation heap, buffers,
+native allocations, npm, and container overhead. Override these positive integer
+values in inventory, keeping the heap cap below the backend container limit.
+
+Initial sizing on `bifrost-2` observed roughly 56–77 MiB backend working sets,
+133 MiB backend cgroup peaks, and a 12 MiB frontend peak shortly after reboot.
+These are provisional budgets, not a load-tested bound: sessions can be cached
+and note bodies are buffered. Monitor real note read/write/list traffic and OOM
+counters before tightening limits. Both slots together have a 640 MiB ceiling
+once both have been deployed with this configuration (320 MiB per slot).
+
+Deploy through the existing inactive-slot health checks and graceful Caddy
+switch, leaving the active slot untouched until verification. A deployment only
+updates the candidate slot; the retained previous slot keeps its old limits.
+After a successful switch, apply a second verified rollout to bound both slots.
+Do not put these limits on shared `docker.service` or `bifrost-stack.service`.
+
 ## Release and deployment
 
 Create a release tag, then explicitly run `build-images.yml` to publish missing images. Copy the example inventory outside the repository and review it before running `site.yml`. On the target Azure VM, Katavti uses its managed identity to fetch runtime secrets directly from Azure Key Vault; secret values do not pass through Ansible. SMTP is disabled by default, so production email sign-in is rejected rather than exposing a development link.
