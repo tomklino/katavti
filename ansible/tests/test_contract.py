@@ -110,6 +110,52 @@ class DeploymentContractTest(unittest.TestCase):
                 self.assertEqual(client_limit, services["client"]["memswap_limit"])
                 self.assertEqual(f"--max-old-space-size={heap}", services["server"]["environment"]["NODE_OPTIONS"])
 
+    def test_update_role_defaults_render_memory_limits_without_other_role_defaults(self):
+        defaults = yaml.safe_load((ROOT / "roles/katavti_update/defaults/main.yml").read_text())
+        initial_defaults = yaml.safe_load((ROOT / "roles/katavti/defaults/main.yml").read_text())
+        for variable in ["katavti_server_memory_mb", "katavti_server_heap_mb", "katavti_client_memory_mb"]:
+            self.assertEqual(initial_defaults[variable], defaults[variable])
+        deployment = {
+            "katavti_client_image": VARS["katavti_client_image"],
+            "katavti_server_image": VARS["katavti_server_image"],
+            "katavti_client_container_name": "katavti-green-client",
+            "katavti_server_container_name": "katavti-green-server",
+        }
+        services = yaml.safe_load(self.jinja.get_template("docker-compose.yml.j2").render(
+            **(defaults | deployment),
+        ))["services"]
+        self.assertEqual("256m", services["server"]["mem_limit"])
+        self.assertEqual("256m", services["server"]["memswap_limit"])
+        self.assertEqual("64m", services["client"]["mem_limit"])
+        self.assertEqual("64m", services["client"]["memswap_limit"])
+        self.assertEqual("--max-old-space-size=128", services["server"]["environment"]["NODE_OPTIONS"])
+
+    def test_both_roles_reject_invalid_memory_budgets(self):
+        invalid = [
+            {"katavti_server_memory_mb": 0},
+            {"katavti_server_memory_mb": "256"},
+            {"katavti_server_memory_mb": True},
+            {"katavti_client_memory_mb": -1},
+            {"katavti_client_memory_mb": "64"},
+            {"katavti_client_memory_mb": True},
+            {"katavti_server_heap_mb": 0},
+            {"katavti_server_heap_mb": "128"},
+            {"katavti_server_heap_mb": True},
+            {"katavti_server_heap_mb": 256},
+            {"katavti_server_heap_mb": 512},
+        ]
+        for role in ["katavti", "katavti_update"]:
+            tasks = yaml.safe_load((ROOT / f"roles/{role}/tasks/main.yml").read_text())
+            validation = next(task["ansible.builtin.assert"]["that"] for task in tasks
+                              if task["name"].startswith("Validate"))
+            expressions = [self.jinja.compile_expression(condition) for condition in validation
+                           if "_memory_mb" in condition or "_heap_mb" in condition]
+            self.assertEqual(4, len(expressions))
+            for overrides, expected in [({}, True)] + [(values, False) for values in invalid]:
+                with self.subTest(role=role, overrides=overrides):
+                    self.assertEqual(expected, all(expression(**(VARS | overrides))
+                                                   for expression in expressions))
+
     def test_production_config_is_complete_and_secrets_are_separate(self):
         config_text = self.render("production.yaml.j2")
         config = yaml.safe_load(config_text)

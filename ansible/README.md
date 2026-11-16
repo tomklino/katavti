@@ -38,6 +38,8 @@ container swap. `katavti_server_heap_mb: 128` sets Node's old-space cap, not its
 total memory limit; the remaining budget covers young-generation heap, buffers,
 native allocations, npm, and container overhead. Override these positive integer
 values in inventory, keeping the heap cap below the backend container limit.
+Both `site.yml` and `update.yml` supply and validate these budgets before
+rendering the shared Compose template.
 
 Initial sizing on `bifrost-2` observed roughly 56–77 MiB backend working sets,
 133 MiB backend cgroup peaks, and a 12 MiB frontend peak shortly after reboot.
@@ -67,7 +69,7 @@ For a normal application release, use `playbooks/update.yml` instead of `site.ym
 1. verifies the selected Git tag and clean checkout;
 2. builds and publishes the immutable client and server images;
 3. reads the existing active slot on the target;
-4. pulls and recreates only the inactive slot with the new images;
+4. pulls and recreates only the inactive slot with the new images and configured memory limits;
 5. verifies the candidate over the shared Docker network;
 6. switches the existing Katavti Caddy route, validates/reloads Caddy, and checks the public endpoints;
 7. rolls back the route and stops the candidate if public verification fails.
