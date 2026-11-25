@@ -1,5 +1,6 @@
 import type { ListQuery, Note, NotesApi } from './notes'
 import { backUpNoteAssets } from './assets'
+import { localWeekStart, pinLocally, readLocalPins, writeLocalPins } from './local-pins'
 
 const storageKey = 'katavti.notes.v1'
 type StoredNotes = Record<string, Note>
@@ -65,6 +66,17 @@ export function createLocalNotesApi(storage: Storage = localStorage): NotesApi {
       writeStorage(storage, notes)
       return ids
     },
+    async loadDaily(count, date) {
+      const ids = await this.createDaily(count, date)
+      const pins = readLocalPins(storage).filter(pin => pin.date <= date && date < pin.end)
+        .map(({ id, period }) => ({ id, period }))
+      return { ids, pins }
+    },
+    async getWeekStart() { return { weekStart: localWeekStart(storage) } },
+    async pinNote(id, request) {
+      await this.read(id)
+      return pinLocally(storage, id, request)
+    },
   }
 }
 
@@ -93,7 +105,19 @@ export async function backUpLocalNotes(remote: NotesApi, storage: Storage = loca
     writeStorage(storage, notes)
     count++
   }
-  if (owner) await backUpStoredAssets(owner, storage)
+  if (owner) {
+    await backUpStoredAssets(owner, storage)
+    if (remote.pinNote) {
+      const pins = readLocalPins(storage)
+      for (const pin of pins) {
+        const id = readStorage(storage)[pin.id]?.backedUpId
+        if (!id || pin.backedUpTo?.[owner] === id) continue
+        await remote.pinNote(id, { period: pin.period, date: pin.date, weekStart: pin.weekStart })
+        pin.backedUpTo = { ...pin.backedUpTo, [owner]: id }
+        writeLocalPins(storage, pins)
+      }
+    }
+  }
   return count
 }
 
@@ -126,5 +150,12 @@ export function createSyncedNotesApi(local: NotesApi, remote: NotesApi): NotesAp
       const [localIds, remoteIds] = await Promise.all([local.createDaily(count, date), remote.createDaily(count, date)])
       return [...new Set([...localIds, ...remoteIds])]
     },
+    async loadDaily(count, date) {
+      if (!remote.loadDaily) return { ids: await this.createDaily(count, date), pins: [] }
+      const [localIds, remoteDaily] = await Promise.all([local.createDaily(count, date), remote.loadDaily(count, date)])
+      return { ids: [...new Set([...localIds, ...remoteDaily.ids])], pins: remoteDaily.pins }
+    },
+    getWeekStart: remote.getWeekStart,
+    pinNote: remote.pinNote,
   }
 }

@@ -2,7 +2,13 @@ export type Note = { content: string; ISODateString: string; tags: Array<[string
 export type SaveResult = string | { id: string; revision?: string }
 export type ImportResult = { id: string; note: Note }
 export type ListQuery = { days?: number; bug?: string }
-export type NotesApi = ReturnType<typeof createNotesApi>
+export type WeekStart = 'sunday' | 'monday'
+export type NotePin = { id: string; period: 'week' | 'month' | 'year' }
+export type PinRequest = { period: NotePin['period']; date: string; weekStart?: WeekStart }
+export type DailyNotes = { ids: string[]; pins: NotePin[] }
+type FullNotesApi = ReturnType<typeof createNotesApi>
+type PinMethods = 'pinNote' | 'loadDaily' | 'getWeekStart'
+export type NotesApi = Omit<FullNotesApi, PinMethods> & Partial<Pick<FullNotesApi, PinMethods>>
 
 export function createNotesApi(baseUrl = import.meta.env.VITE_API_URL || '') {
   async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
@@ -22,6 +28,9 @@ export function createNotesApi(baseUrl = import.meta.env.VITE_API_URL || '') {
     update: (id: string, content: string, revision?: string) => request<SaveResult>(`/notes/${id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content, revision }) }),
     importNote: (id: string, content: string) => request<ImportResult>('/notes/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, content }) }),
     createDaily: (count: number, date: string) => request<string[]>(`/notes/daily?num=${count}&date=${date}`, { method: 'PUT' }),
+    loadDaily: (count: number, date: string) => request<DailyNotes>(`/notes/daily?num=${count}&date=${date}&includePins=true`, { method: 'PUT' }),
+    getWeekStart: () => request<{ weekStart: WeekStart | null }>('/notes/pin-preference'),
+    pinNote: (id: string, pin: PinRequest) => request<NotePin>(`/notes/${id}/pin`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(pin) }),
   }
 }
 

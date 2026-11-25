@@ -2,8 +2,12 @@
   <article class="note" :class="{ active, browsing, unsaved }" @click="$emit('activate')">
     <header :tabindex="active ? -1 : 0" :role="active ? undefined : 'button'" :aria-expanded="active" @keydown.enter.self.prevent="$emit('activate')" @keydown.space.self.prevent="$emit('activate')">
       <span class="note-number" aria-hidden="true">{{ (index + 1).toString().padStart(2, '0') }}</span>
-      <div class="note-heading"><strong>{{ title }}</strong><time v-if="active">{{ formattedDate }}<span> / {{ editable ? 'Daily note' : 'From your notebook' }}</span></time></div>
+      <div class="note-heading"><strong>{{ title }}</strong><time v-if="active">{{ formattedDate }}<span> / {{ pinLabel || (editable ? 'Daily note' : 'From your notebook') }}</span></time></div>
       <span v-if="label" class="note-label">{{ label }}</span>
+      <span v-if="pinLabel" class="note-label pin-label">{{ pinLabel }}</span>
+      <button v-if="!pinLabel" ref="pinButton" type="button" class="pin-button" :aria-label="`Pin ${title}`" aria-haspopup="dialog" @click.stop="openPin">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h-5l-1 6-4 4v2h13v-2l-3-4V3ZM12.5 15v6" /></svg>
+      </button>
       <div v-if="active" class="actions">
         <label class="raw-toggle"><input v-model="raw" type="checkbox"><span>{{ raw ? 'Raw' : 'Preview' }}</span></label>
         <button v-if="editable" type="button" :disabled="uploading" @click.stop="chooseAssets">{{ uploading ? 'Uploading…' : 'Attach' }}</button>
@@ -12,6 +16,24 @@
       </div>
       <span v-else class="note-chevron" aria-hidden="true">↗</span>
     </header>
+    <dialog ref="pinDialog" class="pin-dialog" aria-label="Pin note" @click.stop @close="closePin">
+      <h2>{{ pinStep === 'weekStart' ? 'When does your week start?' : 'Pin note' }}</h2>
+      <p v-if="pinStep === 'weekStart'">We’ll remember this for future weekly pins.</p>
+      <p v-else>{{ title }} · Pinned through the end of the selected period.</p>
+      <div class="pin-options">
+        <template v-if="pinStep === 'weekStart'">
+          <button type="button" :disabled="pinning" @click="pin('week', 'sunday')">Sunday</button>
+          <button type="button" :disabled="pinning" @click="pin('week', 'monday')">Monday</button>
+        </template>
+        <template v-else>
+          <button type="button" :disabled="pinning" @click="pin('week')">This week</button>
+          <button type="button" :disabled="pinning" @click="pin('month')">This month</button>
+          <button type="button" :disabled="pinning" @click="pin('year')">This year</button>
+        </template>
+        <button type="button" @click="dismissPin">Cancel</button>
+      </div>
+      <p v-if="pinError" role="alert">{{ pinError }}</p>
+    </dialog>
     <p v-if="active && saveError" class="save-error" role="alert">{{ saveError }} Copy your draft before <button type="button" :disabled="reloading" @click.stop="reload">reloading the latest version</button>.</p>
     <div v-if="active && uploading" class="asset-progress" role="status">
       <span>{{ uploadStatus }} · {{ uploadIndex }} of {{ uploadTotal }} files</span>
@@ -29,7 +51,7 @@
       <MarkdownEditor v-if="raw" ref="editor" :model-value="note.content" :readonly="!editable" :aria-label="`Edit ${title}`" @update:model-value="edit" />
       <div v-else class="rendered" @click="openAsset" v-html="rendered" />
     </div>
-    <footer v-if="active" class="note-footer"><span>{{ wordCount }} words <span class="footer-separator">/</span> Markdown</span><span class="save-state" :class="{ pending: unsaved }" role="status"><span />{{ saveError ? 'Not saved' : unsaved ? 'Saving changes…' : editable ? 'All changes saved' : 'Read-only · open Daily to write' }}</span></footer>
+    <footer v-if="active" class="note-footer"><span>{{ wordCount }} words <span class="footer-separator">/</span> Markdown</span><span class="save-state" :class="{ pending: unsaved }" role="status"><span />{{ saveError ? 'Not saved' : unsaved ? 'Saving changes…' : editable ? 'All changes saved' : pinLabel ? 'Pinned · read-only' : 'Read-only · open Daily to write' }}</span></footer>
   </article>
 </template>
 
@@ -39,6 +61,7 @@ import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { markdown } from '@/markdown'
 import { downloadNoteAsset, noteAssetImageUrl, uploadNoteAsset, type AssetUploadProgress } from '@/api/assets'
 import { getViewState } from '@/view-state'
+import type { NotePin, WeekStart } from '@/api/notes'
 
 type Presentation = 'hidden' | 'raw' | 'preview'
 
@@ -47,11 +70,11 @@ const assetPath = /^\.\.\/assets\/([0-9a-f-]{36}-[a-zA-Z0-9._-]{1,120})$/
 
 export default defineComponent({
   components: { MarkdownEditor },
-  props: { id: { type: String, required: true }, index: { type: Number, default: 0 }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean, browsing: Boolean },
-  emits: ['activate'],
+  props: { id: { type: String, required: true }, index: { type: Number, default: 0 }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean, browsing: Boolean, pinLabel: String },
+  emits: ['activate', 'pinned'],
   data() {
     const views = getViewState(this.$store)
-    const positions = markRaw(this.browsing ? views.home.notes : views.daily.notes)
+    const positions = markRaw(this.pinLabel ? new Map() as typeof views.daily.notes : this.browsing ? views.home.notes : views.daily.notes)
     const position = markRaw(positions.get(this.id) ?? { raw: this.startRaw, rawScroll: 0, previewScroll: 0 })
     return {
       positions, position, raw: position.raw, copyLabel: 'Copy', timer: 0, reloading: false, pendingContent: null as string | null,
@@ -59,6 +82,7 @@ export default defineComponent({
       uploadProgress: { stage: 'saving', percent: null } as AssetUploadProgress,
       pendingAttachments: [] as PendingAttachment[], contentVersion: 0, disposed: false,
       assetMessage: '', assetError: false, assetImageUrls: {} as Record<string, string>, imageGeneration: 0,
+      pinStep: 'period' as 'period' | 'weekStart', pinning: false, pinError: '',
     }
   },
   computed: {
@@ -154,12 +178,40 @@ export default defineComponent({
       clearTimeout(this.timer)
       this.timer = window.setTimeout(this.flushPendingEdit, 2000)
     },
-    flushPendingEdit() {
+    flushPendingEdit() { void this.savePendingEdit()?.catch(() => undefined) },
+    savePendingEdit(): Promise<void> | undefined {
       if (this.pendingContent === null) return
       clearTimeout(this.timer)
       const content = this.pendingContent
       this.pendingContent = null
-      this.$store.dispatch('saveNote', { id: this.id, content }).catch(() => undefined)
+      return this.$store.dispatch('saveNote', { id: this.id, content })
+    },
+    openPin() {
+      this.pinStep = 'period'; this.pinError = ''
+      const dialog = this.$refs.pinDialog as HTMLDialogElement
+      dialog.showModal()
+    },
+    dismissPin() { (this.$refs.pinDialog as HTMLDialogElement).close() },
+    closePin() { (this.$refs.pinButton as HTMLButtonElement | undefined)?.focus() },
+    async pin(period: NotePin['period'], start?: WeekStart) {
+      if (this.pinning) return
+      this.pinning = true; this.pinError = ''
+      try {
+        const weekStart = period === 'week' ? start ?? await this.$store.dispatch('getWeekStart') : undefined
+        if (!(this.$refs.pinDialog as HTMLDialogElement | undefined)?.open) return
+        if (period === 'week' && !weekStart) {
+          this.pinStep = 'weekStart'
+          await this.$nextTick()
+          const dialog = this.$refs.pinDialog as HTMLDialogElement | undefined
+          dialog?.querySelector('button')?.focus()
+          return
+        }
+        // Start any debounced edit now. A pin references the saved note, not a copy.
+        await this.savePendingEdit()
+        await this.$store.dispatch('pinNote', { id: this.id, period, weekStart })
+        if (!this.disposed) { this.dismissPin(); this.$emit('pinned', period) }
+      } catch (error) { this.pinError = (error as Error).message || 'Unable to pin this note.' }
+      finally { this.pinning = false }
     },
     async reload() {
       if (this.reloading) return
@@ -274,6 +326,15 @@ time { color: var(--muted); display: block; font-size: 10px; margin-top: 5px; }
 time span { opacity: .8; }
 .note-label { background: var(--tag-bg); border-radius: 4px; color: var(--tag-text); font-size: 10px; padding: 3px 8px; }
 .note-chevron { color: var(--muted); font-size: 15px; margin-left: 8px; }
+.pin-button { align-items: center; background: transparent; border-color: transparent; color: var(--muted); display: flex; justify-content: center; min-height: 24px; min-width: 26px; padding: 3px; }
+.pin-button:hover { border-color: var(--line); color: var(--accent); }
+.pin-dialog { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--note-shadow); color: var(--text); max-width: min(380px, calc(100vw - 34px)); padding: 18px; }
+.pin-dialog::backdrop { background: rgb(15 23 42 / .45); }
+.pin-dialog h2 { font-size: 16px; margin: 0 0 8px; }
+.pin-dialog p { color: var(--muted); font-size: 13px; margin: 0 0 12px; overflow-wrap: anywhere; }
+.pin-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.pin-options button { font-size: 12px; }
+.pin-dialog [role='alert'] { color: #b91c1c; margin: 8px 0 0; }
 .actions { align-items: center; display: flex; gap: 12px; white-space: nowrap; }
 .asset-input { display: none; }
 .asset-message { color: var(--muted); flex-shrink: 0; font-size: 11px; margin: 0; padding: 6px 14px; }
@@ -305,7 +366,7 @@ time span { opacity: .8; }
 @media (max-width: 600px) {
   header { gap: 8px; padding: 0 10px; }
   .note.active header { min-height: 48px; }
-  .note.active .note-label, time span { display: none; }
+  .note.active .note-label:not(.pin-label), time span { display: none; }
   .actions { gap: 6px; }.actions button { font-size: 10px; padding: 5px 7px; }
   .raw-toggle { font-size: 10px; }.rendered { padding: 0 12px 12px; }
   .note-footer { font-size: 8px; padding: 6px 10px; }

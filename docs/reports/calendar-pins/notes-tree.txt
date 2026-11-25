@@ -1,0 +1,83 @@
+<temporary data directory>/notes/
+├── browser-backup@example.com/
+│   └── 2026/
+│       └── july.d/
+│           ├── 2026-07-18-july-workspace-1.pin
+│           ├── workspaces-2026-07-18/
+│           │   ├── workspace-1.md
+│           │   ├── workspace-2.md
+│           │   ├── workspace-3.md
+│           │   └── workspace-4.md
+│           └── workspaces-2026-07-19/
+│               ├── workspace-1.md
+│               ├── workspace-2.md
+│               ├── workspace-3.md
+│               └── workspace-4.md
+├── history@example.com/
+│   └── 2026/
+│       ├── november.d/
+│       │   ├── workspaces-2026-11-24/
+│       │   │   └── workspace-1.md
+│       │   └── workspaces-2026-11-25/
+│       │       ├── workspace-1.md
+│       │       ├── workspace-2.md
+│       │       ├── workspace-3.md
+│       │       └── workspace-4.md
+│       └── pinned/
+│           └── 2026-11-24-november-workspace-1.pin
+├── monday@example.com/
+│   ├── .week-start
+│   └── 2026/
+│       ├── july.d/
+│       │   ├── workspaces-2026-07-18/
+│       │   │   ├── workspace-1.md
+│       │   │   ├── workspace-2.md
+│       │   │   ├── workspace-3.md
+│       │   │   └── workspace-4.md
+│       │   ├── workspaces-2026-07-19/
+│       │   │   ├── workspace-1.md
+│       │   │   ├── workspace-2.md
+│       │   │   ├── workspace-3.md
+│       │   │   └── workspace-4.md
+│       │   └── workspaces-2026-07-20/
+│       │       ├── workspace-1.md
+│       │       ├── workspace-2.md
+│       │       ├── workspace-3.md
+│       │       └── workspace-4.md
+│       └── weekly/
+│           └── 29/
+│               └── monday-2026-07-18-july-workspace-1.pin
+└── sunday@example.com/
+    ├── .week-start
+    ├── 2026/
+    │   ├── august.d/
+    │   │   └── workspaces-2026-08-01/
+    │   │       ├── workspace-1.md
+    │   │       ├── workspace-2.md
+    │   │       ├── workspace-3.md
+    │   │       └── workspace-4.md
+    │   ├── july.d/
+    │   │   ├── 2026-07-18-july-workspace-2.pin
+    │   │   ├── workspaces-2026-07-18/
+    │   │   │   ├── workspace-1.md
+    │   │   │   ├── workspace-2.md
+    │   │   │   ├── workspace-3.md
+    │   │   │   └── workspace-4.md
+    │   │   └── workspaces-2026-07-19/
+    │   │       ├── workspace-1.md
+    │   │       ├── workspace-2.md
+    │   │       ├── workspace-3.md
+    │   │       └── workspace-4.md
+    │   ├── pinned/
+    │   │   └── 2026-07-18-july-workspace-3.pin
+    │   └── weekly/
+    │       └── 29/
+    │           ├── sunday-2026-07-18-july-workspace-1.pin
+    │           └── sunday-2026-07-18-july-workspace-4.pin
+    └── 2027/
+        └── january.d/
+            └── workspaces-2027-01-01/
+                ├── workspace-1.md
+                ├── workspace-2.md
+                ├── workspace-3.md
+                └── workspace-4.md

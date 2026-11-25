@@ -4,13 +4,14 @@ import { noteRoutes } from '../../src/routes/notes/index.js'
 import { NotesError, type NotesData } from '../../src/data-modules/notes-data.js'
 
 function setup() {
-  const service: NotesData = { createDaily: vi.fn(), list: vi.fn(), read: vi.fn(), update: vi.fn(), importNote: vi.fn() }
+  const service: NotesData = { createDaily: vi.fn(), list: vi.fn(), read: vi.fn(), update: vi.fn(), importNote: vi.fn(), listPins: vi.fn(), pinNote: vi.fn(), getWeekStart: vi.fn() }
   const app = new Hono<{ Variables: { userId: string } }>()
   app.use('*', async (c, next) => { c.set('userId', 'alice'); await next() })
   app.route('/notes', noteRoutes(service))
   app.onError((error, c) => c.json({ error: error.message }, error instanceof NotesError ? error.status as 400 : 500))
   const post = (url: string, body: unknown) => app.request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  return { service, post }
+  const pin = (body: unknown) => app.request('/notes/note-id/pin', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  return { service, post, pin }
 }
 
 describe('note save and import HTTP contracts', () => {
@@ -29,6 +30,15 @@ describe('note save and import HTTP contracts', () => {
       expect((await post('/notes/id', { content: 'Draft', revision })).status).toBe(400)
     }
     expect(service.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects unknown periods, impossible dates, and missing or invalid week starts', async () => {
+    const { service, pin } = setup()
+    for (const body of [{ period: 'day', date: '2026-07-18' }, { period: 'month', date: '2026-02-30' },
+      { period: 'week', date: '2026-07-18' }, { period: 'week', date: '2026-07-18', weekStart: 'saturday' }]) {
+      expect((await pin(body)).status).toBe(400)
+    }
+    expect(service.pinNote).not.toHaveBeenCalled()
   })
 
   it('imports via a separate create-only operation', async () => {

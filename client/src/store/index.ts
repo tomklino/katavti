@@ -1,7 +1,7 @@
 import { createStore as createVuexStore, type Store } from 'vuex'
 import { authApi, type User } from '@/api/auth'
 import { backUpLocalNotes, createLocalNotesApi, createSyncedNotesApi } from '@/api/local-notes'
-import { notesApi, type ListQuery, type Note, type NotesApi } from '@/api/notes'
+import { notesApi, type ListQuery, type Note, type NotePin, type NotesApi, type WeekStart } from '@/api/notes'
 
 function browserDay(now = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -10,7 +10,7 @@ function browserDay(now = new Date()): string {
 export type State = {
   days: number; bug: string; noteIds: string[]; dailyIds: string[]; notes: Record<string, Note>
   unsavedNotes: Record<string, boolean>; saveErrors: Record<string, string | null>
-  dailyDate: string; previousDayWarning: boolean
+  dailyDate: string; previousDayWarning: boolean; pins: NotePin[]
   loading: boolean; error: string | null; user: User | null; storageWarning: boolean; backupStatus: string
 }
 
@@ -26,12 +26,17 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
     ? Math.max(0, Number(new URLSearchParams(location.search).get('devSaveDelay')) || 0)
     : 0
   const saveQueues = new Map<string, SaveQueue>()
+  let dailyLoad = 0
   return createVuexStore<State>({
-    state: { dailyDate: '', previousDayWarning: false, days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, saveErrors: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
+    state: { pins: [], dailyDate: '', previousDayWarning: false, days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, saveErrors: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
     mutations: {
       setFilter(state, query: ListQuery) { if (query.days !== undefined) state.days = query.days; state.bug = query.bug || '' },
       setIds(state, ids: string[]) { state.noteIds = ids }, setDailyIds(state, ids: string[]) { state.dailyIds = ids },
       setNote(state, { id, note }: { id: string; note: Note }) { state.notes[id] = note },
+      setPins(state, pins: NotePin[]) { state.pins = pins },
+      addPin(state, pin: NotePin) {
+        if (!state.pins.some(({ id, period }) => id === pin.id && period === pin.period)) state.pins.push(pin)
+      },
       setDailyDate(state, date: string) { state.dailyDate = date; state.previousDayWarning = false },
       setPreviousDayWarning(state, value: boolean) { state.previousDayWarning = value },
       setNoteContent(state, { id, content }: { id: string; content: string }) {
@@ -43,7 +48,7 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
       setNoteRevision(state, { id, revision }: { id: string; revision: string }) { if (state.notes[id]) state.notes[id].revision = revision },
       setSaveError(state, { id, error }: { id: string; error: string | null }) { state.saveErrors[id] = error },
       setLoading(state, value: boolean) { state.loading = value }, setError(state, value: string | null) { state.error = value },
-      setUser(state, user: User | null) { state.user = user }, setStorageWarning(state, value: boolean) { state.storageWarning = value },
+      setUser(state, user: User | null) { if (state.user?.email !== user?.email) state.pins = []; state.user = user }, setStorageWarning(state, value: boolean) { state.storageWarning = value },
       setBackupStatus(state, value: string) { state.backupStatus = value },
     },
     actions: {
@@ -52,7 +57,7 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
         try {
           const count = await backUpLocalNotes(remoteApi, storage, user.email)
           commit('setBackupStatus', count ? `${count} local note${count === 1 ? '' : 's'} backed up.` : '')
-          if (state.dailyIds.length) await dispatch('loadDaily', state.dailyIds.length)
+          if (dailyLoad) await dispatch('loadDaily', Math.max(4, state.dailyIds.length))
           else await dispatch('loadNotes')
         } catch (error) {
           commit('setBackupStatus', 'Local notes are safe in this browser, but backup failed.')
@@ -69,7 +74,7 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
           // finishes. Refresh after authentication so another device sees its
           // remote notes (and their asset links) on the first page load.
           if (result.user) {
-            if (state.dailyIds.length) await dispatch('loadDaily', state.dailyIds.length)
+            if (dailyLoad) await dispatch('loadDaily', Math.max(4, state.dailyIds.length))
             else await dispatch('loadNotes')
           }
         }
@@ -90,10 +95,32 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
         finally { commit('setLoading', false) }
       },
       async loadDaily({ state, commit }, count: number) {
-        const api = selectedApi(state); const date = browserDay()
-        const ids = await api.createDaily(count, date)
-        await Promise.all(ids.map(async id => commit('setNote', { id, note: await api.read(id) })))
-        commit('setDailyIds', ids); commit('setDailyDate', date)
+        const api = selectedApi(state); const date = browserDay(); const user = state.user
+        const generation = ++dailyLoad
+        const { ids, pins } = api.loadDaily ? await api.loadDaily(count, date) : { ids: await api.createDaily(count, date), pins: [] }
+        const notes = await Promise.all([...new Set([...ids, ...pins.map(pin => pin.id)])].map(async id => {
+          try { return { id, note: await api.read(id) } }
+          catch (error) { if (ids.includes(id)) throw error }
+        }))
+        if (generation !== dailyLoad || user !== state.user) return
+        const available = new Set<string>()
+        for (const entry of notes) {
+          if (!entry) continue
+          available.add(entry.id)
+          if (!state.unsavedNotes[entry.id]) commit('setNote', entry)
+        }
+        commit('setDailyIds', ids)
+        commit('setPins', pins.filter(pin => available.has(pin.id)))
+        commit('setDailyDate', date)
+      },
+      async getWeekStart({ state }): Promise<WeekStart | null> {
+        return (await selectedApi(state).getWeekStart?.())?.weekStart ?? null
+      },
+      async pinNote({ state, commit }, { id, period, weekStart }: NotePin & { weekStart?: WeekStart }) {
+        const api = selectedApi(state); const user = state.user; const date = browserDay()
+        if (!api.pinNote) throw new Error('Pinning is unavailable.')
+        const pin = await api.pinNote(id, { period, date, weekStart })
+        if (state.user === user && state.dailyDate === date) commit('addPin', pin)
       },
       async reloadNote({ state, commit }, id: string) {
         try {

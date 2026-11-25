@@ -1,0 +1,15 @@
+
+ RUN  v5.0.1 /home/tom/workspace/tomklino/katavti
+
+stdout | server/test/e2e/pins-browser.test.ts
+Port 5173 is in use, trying another one...
+
+ ✓ server/test/e2e/pins-browser.test.ts (3 tests) 13513ms
+   ✓ pins for calendar periods, remembers Sunday or Monday per account, and expires pins on a new device 9845ms
+   ✓ keeps an anonymous pin across reload and backs it up on sign-in 2310ms
+   ✓ pins an older note from All notes without moving its source 854ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  15:18:19
+   Duration  15.75s (tests 87%, import 11%, transform 2%)

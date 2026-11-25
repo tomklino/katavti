@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { NotesData } from '../../data-modules/notes-data.js'
+import { pinRequest } from '../../data-modules/note-pins.js'
 
 type Variables = { userId: string }
 
@@ -16,6 +17,12 @@ export function noteRoutes(service: NotesData) {
     try { body = await c.req.json() } catch { return c.json({ error: 'Expected a JSON body' }, 400) }
     if (!body || typeof body.id !== 'string' || typeof body.content !== 'string') return c.json({ error: 'id and content must be strings' }, 400)
     return c.json(await service.importNote(c.get('userId'), body.id, body.content), 201)
+  })
+  routes.get('/pin-preference', async c => c.json({ weekStart: await service.getWeekStart(c.get('userId')) }))
+  routes.put('/:id/pin', async c => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.json({ error: 'Expected a JSON body' }, 400) }
+    return c.json(await service.pinNote(c.get('userId'), c.req.param('id'), pinRequest(body)))
   })
   routes.get('/:id', async c => c.json(await service.read(c.get('userId'), c.req.param('id'))))
   routes.post('/:id', async c => {
