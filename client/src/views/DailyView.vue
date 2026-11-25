@@ -23,6 +23,8 @@
         :key="id"
         :index="index"
         :pin-label="label"
+        editable
+        start-raw
         :active="activePin === id"
         @activate="activePin = id"
         @pinned="announcePin"
@@ -31,10 +33,10 @@
     </section>
     <div class="daily-controls">
       <span v-if="pinMessage" class="pin-message" role="status">{{ pinMessage }}</span>
-      <nav v-if="$store.state.dailyIds.length > maxVisible" class="note-pages" aria-label="Daily note pages">
+      <nav v-if="dailyIds.length > maxVisible" class="note-pages" aria-label="Daily note pages">
         <button :disabled="pageStart === 0" aria-label="Previous daily notes" @click="activate(pageStart - 1)">←</button>
-        <span>{{ pageStart + 1 }}–{{ pageStart + visibleDailyIds.length }} / {{ $store.state.dailyIds.length }}</span>
-        <button :disabled="pageStart + maxVisible >= $store.state.dailyIds.length" aria-label="Next daily notes" @click="activate(pageStart + maxVisible)">→</button>
+        <span>{{ pageStart + 1 }}–{{ pageStart + visibleDailyIds.length }} / {{ dailyIds.length }}</span>
+        <button :disabled="pageStart + maxVisible >= dailyIds.length" aria-label="Next daily notes" @click="activate(pageStart + maxVisible)">→</button>
       </nav>
       <button class="add" aria-label="Add note" :disabled="adding" @click="add"><span aria-hidden="true">+</span> {{ adding ? 'Opening…' : 'New note' }}</button>
     </div>
@@ -50,18 +52,42 @@ export default defineComponent({
   components: { NoteCard },
   data() {
     const daily = getViewState(this.$store).daily
-    const { dailyDate, dailyIds } = this.$store.state
-    const active = daily.date === dailyDate && daily.activeId ? dailyIds.indexOf(daily.activeId) : -1
+    const { dailyDate, dailyIds, pins } = this.$store.state
+    const pinnedIds = new Set(pins.map((pin: NotePin) => pin.id))
+    const active = daily.date === dailyDate && daily.activeId ? dailyIds.filter((id: string) => !pinnedIds.has(id)).indexOf(daily.activeId) : -1
     return { active: Math.max(0, active), activePin: '', pinMessage: '', adding: false, error: '', maxVisible: 10000, resizeObserver: null as ResizeObserver | null }
   },
   computed: {
+    dailyIds(): string[] {
+      const pinnedIds = new Set(this.$store.state.pins.map((pin: NotePin) => pin.id))
+      return this.$store.state.dailyIds.filter((id: string) => !pinnedIds.has(id))
+    },
     pageStart(): number { return Math.floor(this.active / this.maxVisible) * this.maxVisible },
-    visibleDailyIds(): string[] { return this.$store.state.dailyIds.slice(this.pageStart, this.pageStart + this.maxVisible) },
+    visibleDailyIds(): string[] { return this.dailyIds.slice(this.pageStart, this.pageStart + this.maxVisible) },
     pinnedNotes(): { id: string; label: string }[] {
       return this.$store.state.pins.map(({ id, period }: NotePin) => ({ id, label: period[0].toUpperCase() + period.slice(1) }))
     },
   },
-  watch: { '$store.state.dailyDate': 'resetForDay' },
+  watch: {
+    '$store.state.dailyDate': 'resetForDay',
+    '$store.state.pins'(pins: NotePin[], previous: NotePin[]) {
+      const changed = pins.find(pin => !previous.some(old => old.id === pin.id && old.period === pin.period))
+      if (changed) this.announcePin(changed.period)
+      else if (previous.some(old => !pins.some(pin => pin.id === old.id))) this.pinMessage = 'Note unpinned.'
+    },
+    dailyIds(ids: string[], previous: string[]) {
+      const activeId = previous[this.active]
+      const restoredPin = this.activePin && ids.includes(this.activePin) ? this.activePin : ''
+      if (restoredPin) {
+        this.active = ids.indexOf(restoredPin)
+        this.activePin = ''
+      } else {
+        const index = ids.indexOf(activeId)
+        this.active = index < 0 ? Math.min(this.active, Math.max(0, ids.length - 1)) : index
+        if (activeId && !ids.includes(activeId) && this.$store.state.pins.some((pin: NotePin) => pin.id === activeId)) this.activePin = activeId
+      }
+    },
+  },
   created() { this.resetForDay(); this.loadDaily() },
   mounted() {
     if (typeof ResizeObserver === 'undefined') return
@@ -72,7 +98,7 @@ export default defineComponent({
   },
   beforeUnmount() {
     this.resizeObserver?.disconnect()
-    getViewState(this.$store).daily.activeId = this.$store.state.dailyIds[this.active]
+    getViewState(this.$store).daily.activeId = this.dailyIds[this.active]
   },
   methods: {
     resetForDay() {
@@ -88,7 +114,7 @@ export default defineComponent({
     async loadDaily() {
       try {
         await this.$store.dispatch('loadDaily', 4)
-        this.active = Math.min(this.active, Math.max(0, this.$store.state.dailyIds.length - 1))
+        this.active = Math.min(this.active, Math.max(0, this.dailyIds.length - 1))
       } catch { this.error = 'Unable to open your daily notes. Please try again.' }
     },
     activate(index: number) { this.active = index },
@@ -99,7 +125,8 @@ export default defineComponent({
       try {
         const nextIndex = this.$store.state.dailyIds.length
         await this.$store.dispatch('loadDaily', nextIndex + 1)
-        this.active = Math.min(nextIndex, this.$store.state.dailyIds.length - 1)
+        const newId = this.$store.state.dailyIds[nextIndex]
+        this.active = Math.max(0, this.dailyIds.indexOf(newId))
       } catch { this.error = 'Unable to add a note. Your existing notes are safe.' }
       finally { this.adding = false }
     },

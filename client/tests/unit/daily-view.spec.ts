@@ -48,6 +48,37 @@ describe('DailyView additional notes', () => {
     } finally { returned.unmount() }
   })
 
+  it('moves pinned notes out of the daily list and restores them on unpin', async () => {
+    const api = notesApi()
+    const store = createStore(api as any, api as any)
+    const wrapper = mount(DailyView, { global: { plugins: [store], stubs: {
+      NoteCard: { props: { id: String, active: Boolean, editable: Boolean, startRaw: Boolean }, emits: ['activate'], template: '<button :data-id="id" :data-active="active" :data-editable="editable" :data-raw="startRaw" @click="$emit(\'activate\')" />' },
+    } } })
+    try {
+      await vi.waitFor(() => expect(store.state.dailyIds).toHaveLength(4))
+      await wrapper.get('[data-id="note-2"]').trigger('click')
+      store.commit('addPin', { id: 'note-1', period: 'week' })
+      await wrapper.vm.$nextTick()
+      expect(wrapper.get('[aria-label="Daily notes"]').findAll('button')).toHaveLength(3)
+      expect(wrapper.get('[aria-label="Pinned notes"] [data-id="note-1"]').attributes('data-editable')).toBe('true')
+      expect(wrapper.get('[aria-label="Pinned notes"] [data-id="note-1"]').attributes('data-raw')).toBe('true')
+      expect(wrapper.get('[data-id="note-2"]').attributes('data-active')).toBe('true')
+
+      store.commit('addPin', { id: 'note-2', period: 'month' })
+      await wrapper.vm.$nextTick()
+      expect(wrapper.get('[aria-label="Pinned notes"] [data-id="note-2"]').attributes('data-active')).toBe('true')
+      store.commit('removePin', 'note-2')
+      await wrapper.vm.$nextTick()
+      expect(wrapper.get('[aria-label="Daily notes"] [data-id="note-2"]').attributes('data-active')).toBe('true')
+
+      Object.assign(api, { loadDaily: async (count: number) => ({ ids: await api.createDaily(count), pins: [{ id: 'note-1', period: 'week' }] }) })
+      await wrapper.get('[aria-label="Add note"]').trigger('click')
+      await vi.waitFor(() => expect(wrapper.get('[data-id="note-5"]').attributes('data-active')).toBe('true'))
+      expect(wrapper.get('[aria-label="Daily notes"]').findAll('button')).toHaveLength(4)
+      expect(store.state.dailyIds).toHaveLength(5)
+    } finally { wrapper.unmount() }
+  })
+
   it('pages large collections without hiding the active editor or losing access to notes', async () => {
     let resize: ResizeObserverCallback = () => undefined
     vi.stubGlobal('ResizeObserver', class {
