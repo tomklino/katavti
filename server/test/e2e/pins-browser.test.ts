@@ -134,6 +134,49 @@ async function visiblePins(page: Page, titles: string[]) {
   if (!titles.length) expect(await pinned(page).count()).toBe(0)
 }
 
+it('dismisses the pin dialog on outside clicks but not clicks inside it', async () => {
+  const page = await device()
+  try {
+    await openDay(page, '2026-07-18')
+    const trigger = daily(page).locator('.note').first().getByRole('button', { name: 'Pin Untitled note', exact: true })
+    await trigger.click()
+    const box = await dialog(page).boundingBox()
+    if (!box) throw new Error('Missing pin dialog')
+
+    // The dialog's padding and contents are not the backdrop.
+    await page.mouse.click(box.x + 3, box.y + 3)
+    expect(await dialog(page).isVisible()).toBe(true)
+    await dialog(page).getByRole('heading', { name: 'Pin note' }).click()
+    expect(await dialog(page).isVisible()).toBe(true)
+
+    await page.mouse.click(1, 1)
+    await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+    expect(await trigger.evaluate(button => button === document.activeElement)).toBe(true)
+    expect(await pinned(page).count()).toBe(0)
+
+    // The pin button is also outside the modal; a click there closes it.
+    await trigger.click()
+    const triggerBox = await trigger.boundingBox()
+    if (!triggerBox) throw new Error('Missing pin button')
+    await page.mouse.click(triggerBox.x + triggerBox.width / 2, triggerBox.y + triggerBox.height / 2)
+    await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+
+    await trigger.click()
+    await dialog(page).getByRole('button', { name: 'This week' }).click()
+    await page.getByRole('heading', { name: 'When does your week start?' }).waitFor()
+    await page.mouse.click(1, 1)
+    await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+    expect(await pinned(page).count()).toBe(0)
+
+    await trigger.click()
+    await page.getByRole('heading', { name: 'Pin note' }).waitFor()
+    await dialog(page).getByRole('button', { name: 'Cancel' }).click()
+    await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+  } finally {
+    await page.context().close()
+  }
+}, 30_000)
+
 it('pins for calendar periods, remembers Sunday or Monday per account, and expires pins on a new device', async () => {
   const sunday = 'sunday@example.com'
   const page = await device(sunday)
@@ -164,7 +207,7 @@ it('pins for calendar periods, remembers Sunday or Monday per account, and expir
   await pin(page, 'This year', 'year')
   await visiblePins(page, ['Weekly planning', 'July checklist', '2026 goals'])
   expect(await pinned(page).evaluate(section => section.previousElementSibling?.getAttribute('aria-label'))).toBe('Daily notes')
-  await pinned(page).getByRole('button', { name: /2026 goals/ }).click()
+  await pinned(page).locator('.note').filter({ hasText: '2026 goals' }).locator('header').click()
   await pinned(page).locator('.note.active').getByText('This note stays in its original workspace.').waitFor()
   await screenshot(page, '03-all-periods-expanded')
   await page.setViewportSize({ width: 390, height: 740 })
@@ -206,6 +249,28 @@ it('pins for calendar periods, remembers Sunday or Monday per account, and expir
   await other.context().close()
 }, 75_000)
 
+it('switches and unpins an anonymous note across reloads', async () => {
+  const page = await device()
+  try {
+    await openDay(page, '2026-07-18')
+    await openPin(page, 0, 'Local switch')
+    await pin(page, 'This month', 'month', false)
+    await page.reload()
+    await visiblePins(page, ['Local switch'])
+    await pinned(page).getByRole('button', { name: 'Pin Local switch', exact: true }).click()
+    await pin(page, 'This year', 'year', false)
+    expect(await pinned(page).locator('.pin-label').innerText()).toBe('Year')
+    await page.reload()
+    await visiblePins(page, ['Local switch'])
+    expect(await pinned(page).locator('.pin-label').innerText()).toBe('Year')
+    await pinned(page).getByRole('button', { name: 'Pin Local switch', exact: true }).click()
+    await dialog(page).getByRole('button', { name: 'Unpin' }).click()
+    await visiblePins(page, [])
+    await page.reload()
+    await visiblePins(page, [])
+  } finally { await page.context().close() }
+}, 45_000)
+
 it('keeps an anonymous pin across reload and backs it up on sign-in', async () => {
   const email = 'browser-backup@example.com'
   const page = await device()
@@ -240,14 +305,35 @@ it('pins an older note from All notes without moving its source', async () => {
   expect(saved.ok()).toBe(true)
   await page.clock.setFixedTime(today)
   await page.goto(`${origin}/`)
-  await page.getByRole('button', { name: 'Pin A note from history' }).click()
-  const saving = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/pin'))
+  const card = page.locator('.note').filter({ hasText: 'A note from history' })
+  const trigger = card.getByRole('button', { name: 'Pin A note from history' })
+  const unpinnedColor = await trigger.evaluate(button => getComputedStyle(button).color)
+  await trigger.click()
+  await dialog(page).getByRole('button', { name: 'This week' }).click()
+  await dialog(page).getByRole('button', { name: 'Monday' }).click()
+  await dialog(page).waitFor({ state: 'hidden' })
+  await expect.poll(() => trigger.getAttribute('aria-pressed')).toBe('true')
+  expect(await trigger.evaluate(button => button.classList.contains('pinned'))).toBe(true)
+  expect(await trigger.evaluate(button => getComputedStyle(button).color)).not.toBe(unpinnedColor)
+  expect(await card.locator('.pin-label').innerText()).toBe('Week')
+
+  await trigger.click()
+  const saving = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/pin') && response.request().method() === 'PUT')
   await dialog(page).getByRole('button', { name: 'This year' }).click()
   await log(await saving)
-  const confirmation = page.getByText('Pinned for the rest of this year.')
-  await confirmation.waitFor()
+  await page.getByText('Pinned for the rest of this year.').waitFor()
+  expect(await card.locator('.pin-label').innerText()).toBe('Year')
   await screenshot(page, '13-pin-from-history')
-  await page.getByRole('link', { name: 'Open Daily' }).click()
+  await page.reload()
+  await expect.poll(() => trigger.getAttribute('aria-pressed')).toBe('true')
+  expect(await card.locator('.pin-label').innerText()).toBe('Year')
+  await page.getByRole('link', { name: 'Daily', exact: true }).click()
   await visiblePins(page, ['A note from history'])
+  expect(await pinned(page).locator('.pin-label').innerText()).toBe('Year')
+  await pinned(page).getByRole('button', { name: 'Pin A note from history', exact: true }).click()
+  await dialog(page).getByRole('button', { name: 'Unpin' }).click()
+  await visiblePins(page, [])
+  await page.reload()
+  await visiblePins(page, [])
   await page.context().close()
-}, 30_000)
+}, 45_000)

@@ -2,7 +2,7 @@ import path from 'node:path'
 import { lstat, mkdir, open, readFile, readdir, writeFile, rename, rm, link } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { NotesError, type Note, type NotesData, type PinRequest } from './notes-data.js'
-import { calendarDate, dailyNotePath, findPins, pinPath, pinRecord, pinRequest } from './note-pins.js'
+import { calendarDate, dailyNotePath, findPins, pinStatePath, pinStateRecord, pinRequest } from './note-pins.js'
 import { checkRevision } from './note-conflicts.js'
 import { validateAssetFilename, type AssetsData } from './assets-data.js'
 
@@ -255,15 +255,18 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     await read(userId, id)
     const root = userDirectory(userId)
     const weekStart = request.period === 'week' ? await rememberWeekStart(root, request.weekStart!) : undefined
-    const file = path.join(root, pinPath(decoded, { ...request, weekStart }))
-    await withWriteLock(root, file, async () => {
-      try {
-        const existing = JSON.parse(await fs.readFile(file, 'utf8'))
-        if (existing?.id === decoded && existing.date <= request.date) return
-      } catch (error: any) { if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error }
-      await replaceFile(file, pinRecord(decoded, request.date))
-    })
+    const file = path.join(root, pinStatePath(decoded))
+    await withWriteLock(root, file, () => replaceFile(file, pinStateRecord(decoded, request.date, request.period, weekStart)))
     return { id: encodeURIComponent(decoded), period: request.period }
+  }
+
+  async function unpinNote(userId: string, id: string, date: string) {
+    calendarDate(date, now)
+    const { decoded } = notePath(userId, id)
+    await read(userId, id)
+    const root = userDirectory(userId)
+    const file = path.join(root, pinStatePath(decoded))
+    await withWriteLock(root, file, () => replaceFile(file, pinStateRecord(decoded, date, null)))
   }
 
   async function listPins(userId: string, date?: string) {
@@ -312,5 +315,5 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     })
   }
 
-  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, listPins, getWeekStart }
+  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, unpinNote, listPins, getWeekStart }
 }

@@ -1,7 +1,7 @@
 import { BlobServiceClient, type ContainerClient } from '@azure/storage-blob'
 import { DefaultAzureCredential, ManagedIdentityCredential } from '@azure/identity'
 import { NotesError, type Note, type NotesData, type PinRequest } from './notes-data.js'
-import { calendarDate, dailyNotePath, findPins, pinPath, pinRecord, pinRequest } from './note-pins.js'
+import { calendarDate, dailyNotePath, findPins, pinStatePath, pinStateRecord, pinRequest } from './note-pins.js'
 import { checkRevision, staleNoteError } from './note-conflicts.js'
 import { validateAssetFilename, type AssetsData } from './assets-data.js'
 
@@ -202,26 +202,18 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
     const decoded = decodeNoteId(id)
     await read(userId, id)
     const weekStart = request.period === 'week' ? await rememberWeekStart(userId, request.weekStart!) : undefined
-    const name = `${userId}/${pinPath(decoded, { ...request, weekStart })}`
-    const record = pinRecord(decoded, request.date)
-    while (true) {
-      let current: Awaited<ReturnType<typeof downloadVersion>> | undefined
-      try { current = await downloadVersion(name) }
-      catch (error) { if (!isNotFound(error)) throw error }
-      if (current) {
-        try {
-          const existing = JSON.parse(current.content)
-          if (existing?.id === decoded && existing.date <= request.date) break
-        } catch { /* Replace malformed pin records. */ }
-      }
-      try {
-        await container.getBlockBlobClient(name).upload(record, Buffer.byteLength(record), {
-          conditions: current ? { ifMatch: current.revision } : { ifNoneMatch: '*' },
-        })
-        break
-      } catch (error: any) { if (error?.statusCode !== 409 && error?.statusCode !== 412) throw error }
-    }
+    const name = `${userId}/${pinStatePath(decoded)}`
+    const record = pinStateRecord(decoded, request.date, request.period, weekStart)
+    await container.getBlockBlobClient(name).upload(record, Buffer.byteLength(record))
     return { id: encodeURIComponent(decoded), period: request.period }
+  }
+
+  async function unpinNote(userId: string, id: string, date: string) {
+    calendarDate(date, now)
+    const decoded = decodeNoteId(id)
+    await read(userId, id)
+    const record = pinStateRecord(decoded, date, null)
+    await container.getBlockBlobClient(`${userId}/${pinStatePath(decoded)}`).upload(record, Buffer.byteLength(record))
   }
 
   async function listPins(userId: string, date?: string) {
@@ -260,5 +252,5 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
     }
   }
 
-  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, listPins, getWeekStart }
+  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, unpinNote, listPins, getWeekStart }
 }

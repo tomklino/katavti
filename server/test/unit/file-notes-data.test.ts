@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -25,26 +25,41 @@ describe('filesystem notes data', () => {
     const [id] = await data.createDaily('alice', 1, '2026-07-01')
     expect(await data.getWeekStart('alice')).toBeNull()
     await data.pinNote('alice', id, { period: 'week', date: '2026-12-31', weekStart: 'monday' })
+    expect(await data.listPins('alice', '2027-01-03')).toEqual([{ id, period: 'week' }])
     await data.pinNote('alice', id, { period: 'month', date: '2026-12-31' })
+    expect(await data.listPins('alice', '2026-12-31')).toEqual([{ id, period: 'month' }])
     await data.pinNote('alice', id, { period: 'year', date: '2026-12-31' })
     expect(await data.getWeekStart('alice')).toBe('monday')
     expect(await data.getWeekStart('bob')).toBeNull()
     expect(await data.listPins('bob', '2026-12-31')).toEqual([])
     expect(await data.listPins('alice', '2026-12-30')).toEqual([])
-    expect(await data.listPins('alice', '2026-12-31')).toEqual(['week', 'month', 'year'].map(period => ({ id, period })))
-    expect(await data.listPins('alice', '2027-01-03')).toEqual([{ id, period: 'week' }])
-    expect(await data.listPins('alice', '2027-01-04')).toEqual([])
-    expect(JSON.parse(await readFile(path.join(dataDir, 'alice/2027/weekly/1/monday-2026-07-01-july-workspace-1.pin'), 'utf8'))).toEqual({ id: decodeURIComponent(id), date: '2026-12-31' })
+    expect(await data.listPins('alice', '2026-12-31')).toEqual([{ id, period: 'year' }])
+    expect(await data.listPins('alice', '2027-01-03')).toEqual([])
     await data.update('alice', id, '# Updated after pinning')
     expect((await data.read('alice', (await data.listPins('alice', '2026-12-31'))[0].id)).content).toBe('# Updated after pinning')
+    await data.unpinNote('alice', id, '2026-12-31')
+    expect(await createData().listPins('alice', '2026-12-31')).toEqual([])
     await expect(data.pinNote('bob', id, { period: 'year', date: '2026-12-31' })).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('suppresses legacy bucket pins after switching or unpinning, even after the new pin expires', async () => {
+    const data = createData()
+    const [id] = await data.createDaily('alice', 1, '2026-07-01')
+    const directory = path.join(dataDir, 'alice/2026/pinned')
+    await mkdir(directory, { recursive: true })
+    await writeFile(path.join(directory, '2026-07-01-july-workspace-1.pin'), JSON.stringify({ id: decodeURIComponent(id), date: '2026-07-01' }))
+    expect(await data.listPins('alice', '2026-07-18')).toEqual([{ id, period: 'year' }])
+    await data.pinNote('alice', id, { period: 'week', date: '2026-07-18', weekStart: 'sunday' })
+    expect(await data.listPins('alice', '2026-07-18')).toEqual([{ id, period: 'week' }])
+    expect(await data.listPins('alice', '2026-07-19')).toEqual([])
+    await data.unpinNote('alice', id, '2026-07-18')
+    expect(await data.listPins('alice', '2026-07-18')).toEqual([])
   })
 
   it('supports week 53 instead of expiring early at the end of the year', async () => {
     const data = createData()
     const [id] = await data.createDaily('alice', 1, '2028-12-31')
     await data.pinNote('alice', id, { period: 'week', date: '2028-12-31', weekStart: 'monday' })
-    expect(await readdir(path.join(dataDir, 'alice/2028/weekly/53'))).toHaveLength(1)
     expect(await data.listPins('alice', '2028-12-31')).toEqual([{ id, period: 'week' }])
     expect(await data.listPins('alice', '2029-01-01')).toEqual([])
   })

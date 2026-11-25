@@ -31,6 +31,27 @@ describe('notes Vuex store', () => {
     expect(store.state.notes['note-1'].content).toBe('# Note')
   })
 
+  it('does not let a delayed pin refresh overwrite a newer pin or unpin', async () => {
+    let finish!: (pins: { id: string; period: 'week' }[]) => void
+    const pinApi = {
+      ...api,
+      listPins: () => new Promise<{ id: string; period: 'week' }[]>(resolve => { finish = resolve }),
+      pinNote: async (id: string) => ({ id, period: 'year' as const }),
+      unpinNote: async () => ({ ok: true }),
+    }
+    const store = createStore(pinApi, pinApi)
+    const firstRefresh = store.dispatch('loadPins')
+    await store.dispatch('pinNote', { id: 'note-1', period: 'year' })
+    finish([{ id: 'note-1', period: 'week' }])
+    await firstRefresh
+    expect(store.state.pins).toEqual([{ id: 'note-1', period: 'year' }])
+    const secondRefresh = store.dispatch('loadPins')
+    await store.dispatch('unpinNote', 'note-1')
+    finish([{ id: 'note-1', period: 'week' }])
+    await secondRefresh
+    expect(store.state.pins).toEqual([])
+  })
+
   it('saves an edited note through the mocked API', async () => {
     const store = createStore(api, api)
     await store.dispatch('saveNote', { id: 'note-1', content: 'changed' })

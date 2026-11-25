@@ -23,6 +23,18 @@ describe('local notes', () => {
     expect(await api.list({ days: 5 })).toContain(id)
   })
 
+  it('switches one local pin between periods and removes it on unpin', async () => {
+    const storage = memoryStorage()
+    const api = createLocalNotesApi(storage)
+    const [id] = await api.createDaily(1, '2026-09-26')
+    await api.pinNote!(id, { period: 'week', date: '2026-09-28', weekStart: 'monday' })
+    await api.pinNote!(id, { period: 'year', date: '2026-09-28' })
+    expect(await api.listPins!('2026-09-28')).toEqual([{ id, period: 'year' }])
+    expect(await createLocalNotesApi(storage).listPins!('2026-10-01')).toEqual([{ id, period: 'year' }])
+    await api.unpinNote!(id, '2026-09-28')
+    expect(await createLocalNotesApi(storage).listPins!('2026-09-28')).toEqual([])
+  })
+
   it('keeps additional notes visible when the daily view reloads its initial count', async () => {
     const api = createLocalNotesApi(memoryStorage())
     const firstLoad = await api.createDaily(5, '2026-09-26')

@@ -59,15 +59,12 @@ describe('Azure notes data', () => {
     ])
     await data.pinNote('alice', id, { period: 'year', date: '2026-07-18' })
     expect(await createData(container).data.getWeekStart('alice')).toBe('sunday')
-    expect(await data.listPins('alice', '2026-07-18')).toEqual(['week', 'month', 'year'].map(period => ({ id, period })))
-    expect(await data.listPins('alice', '2026-07-19')).toEqual(['month', 'year'].map(period => ({ id, period })))
+    expect(await data.listPins('alice', '2026-07-18')).toEqual([{ id, period: 'year' }])
+    expect(await data.listPins('alice', '2026-07-19')).toEqual([{ id, period: 'year' }])
     expect(await data.listPins('alice', '2026-08-01')).toEqual([{ id, period: 'year' }])
     expect(await data.listPins('alice', '2027-01-01')).toEqual([])
-    expect([...container.blobs.keys()].filter(name => name.endsWith('.pin')).sort()).toEqual([
-      'alice/2026/july.d/2026-07-18-july-workspace-1.pin',
-      'alice/2026/pinned/2026-07-18-july-workspace-1.pin',
-      'alice/2026/weekly/29/sunday-2026-07-18-july-workspace-1.pin',
-    ])
+    await data.unpinNote('alice', id, '2026-07-18')
+    expect(await createData(container).data.listPins('alice', '2026-07-18')).toEqual([])
   })
   it('creates the requested daily notes', async () => {
     const { data, container } = createData()

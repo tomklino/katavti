@@ -4,14 +4,14 @@ import { noteRoutes } from '../../src/routes/notes/index.js'
 import { NotesError, type NotesData } from '../../src/data-modules/notes-data.js'
 
 function setup() {
-  const service: NotesData = { createDaily: vi.fn(), list: vi.fn(), read: vi.fn(), update: vi.fn(), importNote: vi.fn(), listPins: vi.fn(), pinNote: vi.fn(), getWeekStart: vi.fn() }
+  const service: NotesData = { createDaily: vi.fn(), list: vi.fn(), read: vi.fn(), update: vi.fn(), importNote: vi.fn(), listPins: vi.fn(), pinNote: vi.fn(), unpinNote: vi.fn(), getWeekStart: vi.fn() }
   const app = new Hono<{ Variables: { userId: string } }>()
   app.use('*', async (c, next) => { c.set('userId', 'alice'); await next() })
   app.route('/notes', noteRoutes(service))
   app.onError((error, c) => c.json({ error: error.message }, error instanceof NotesError ? error.status as 400 : 500))
   const post = (url: string, body: unknown) => app.request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
   const pin = (body: unknown) => app.request('/notes/note-id/pin', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  return { service, post, pin }
+  return { service, post, pin, app }
 }
 
 describe('note save and import HTTP contracts', () => {
@@ -39,6 +39,19 @@ describe('note save and import HTTP contracts', () => {
       expect((await pin(body)).status).toBe(400)
     }
     expect(service.pinNote).not.toHaveBeenCalled()
+  })
+
+  it('lists and unpins using a valid browser date', async () => {
+    const { service, app } = setup()
+    vi.mocked(service.listPins).mockResolvedValue([{ id: 'note-id', period: 'year' }])
+    const listed = await app.request('/notes/pins?date=2026-07-18')
+    expect(await listed.json()).toEqual([{ id: 'note-id', period: 'year' }])
+    expect(service.listPins).toHaveBeenCalledWith('alice', '2026-07-18')
+    expect((await app.request('/notes/note-id/pin?date=2026-02-30', { method: 'DELETE' })).status).toBe(400)
+    expect((await app.request('/notes/note-id/pin', { method: 'DELETE' })).status).toBe(400)
+    expect(service.unpinNote).not.toHaveBeenCalled()
+    expect((await app.request('/notes/note-id/pin?date=2026-07-18', { method: 'DELETE' })).status).toBe(200)
+    expect(service.unpinNote).toHaveBeenCalledWith('alice', 'note-id', '2026-07-18')
   })
 
   it('imports via a separate create-only operation', async () => {
