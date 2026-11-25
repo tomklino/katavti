@@ -1,22 +1,23 @@
 <template><div ref="host" class="markdown-editor" /></template>
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, markRaw } from 'vue'
 import { markdown } from '@codemirror/lang-markdown'
 import { Annotation, Compartment, EditorState } from '@codemirror/state'
-
-const readonlyCompartment = new Compartment()
-const externalUpdate = Annotation.define<boolean>()
 import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
+import type { EditorPosition } from '@/view-state'
+
+const readonlyCompartment = new Compartment()
+const externalUpdate = Annotation.define<boolean>()
 
 export default defineComponent({
   props: { modelValue: { type: String, required: true }, readonly: Boolean, ariaLabel: { type: String, default: 'Markdown note' } },
   emits: ['update:modelValue'],
-  data: () => ({ view: undefined as EditorView | undefined }),
+  data: () => ({ view: undefined as ReturnType<typeof markRaw<EditorView>> | undefined }),
   mounted() {
-    this.view = new EditorView({
+    this.view = markRaw(new EditorView({
       parent: this.$refs.host as HTMLElement,
       state: EditorState.create({
         doc: this.modelValue,
@@ -40,11 +41,22 @@ export default defineComponent({
           }),
         ],
       }),
-    })
+    }))
   },
   beforeUnmount() { this.view?.destroy() },
   methods: {
     focus() { this.view?.focus() },
+    capturePosition(): EditorPosition | undefined {
+      if (!this.view) return
+      const { doc, selection } = this.view.state
+      return { doc, selection, scroll: this.view.scrollSnapshot() }
+    },
+    restorePosition(position: EditorPosition) {
+      // A scroll snapshot only applies to the document it was captured from.
+      if (this.view?.state.doc.eq(position.doc)) {
+        this.view.dispatch({ selection: position.selection, effects: position.scroll })
+      }
+    },
     insert(text: string) {
       if (!this.view || this.readonly) return false
       this.view.dispatch(this.view.state.replaceSelection(text))

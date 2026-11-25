@@ -91,6 +91,30 @@ describe('NoteCard focus states', () => {
     expect(focus).toHaveBeenCalledOnce()
   })
 
+  it('remembers the raw selection and a separate preview scroll after remounting', async () => {
+    const wrapper = mountCard(true)
+    const store = wrapper.vm.$store
+    const props = wrapper.props()
+    const selection = { anchor: 3, head: 11 }
+    const view = (wrapper.vm.$refs.editor as any).view
+    view.dispatch({ selection })
+
+    await wrapper.get('.raw-toggle input').setValue(false)
+    ;(wrapper.get('.note-body').element as HTMLElement).scrollTop = 240
+    wrapper.unmount()
+
+    const returned = mount(NoteCard, { props, global: { plugins: [store] } })
+    try {
+      expect(returned.find('.rendered').exists()).toBe(true)
+      expect((returned.get('.note-body').element as HTMLElement).scrollTop).toBe(240)
+      await returned.get('.raw-toggle input').setValue(true)
+      const returnedView = (returned.vm.$refs.editor as any).view
+      expect(returnedView.state.selection.main).toMatchObject(selection)
+      await returned.get('.raw-toggle input').setValue(false)
+      expect((returned.get('.note-body').element as HTMLElement).scrollTop).toBe(240)
+    } finally { returned.unmount() }
+  })
+
   it('waits for two seconds without typing before saving', async () => {
     vi.useFakeTimers()
     const wrapper = mountCard(true)

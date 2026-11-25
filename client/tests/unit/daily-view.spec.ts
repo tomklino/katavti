@@ -31,6 +31,23 @@ describe('DailyView additional notes', () => {
     wrapper.unmount()
   })
 
+  it('selects the same note when returning to the daily view', async () => {
+    const api = notesApi()
+    const store = createStore(api as any, api as any)
+    const options = { global: { plugins: [store], stubs: {
+      NoteCard: { props: ['id', 'active'], emits: ['activate'], template: '<button :data-id="id" :data-active="active" @click="$emit(\'activate\')" />' },
+    } } }
+    const wrapper = mount(DailyView, options)
+    await vi.waitFor(() => expect(store.state.dailyIds).toHaveLength(4))
+    await wrapper.get('[data-id="note-3"]').trigger('click')
+    wrapper.unmount()
+
+    const returned = mount(DailyView, options)
+    try {
+      await vi.waitFor(() => expect(returned.get('[data-id="note-3"]').attributes('data-active')).toBe('true'))
+    } finally { returned.unmount() }
+  })
+
   it('pages large collections without hiding the active editor or losing access to notes', async () => {
     let resize: ResizeObserverCallback = () => undefined
     vi.stubGlobal('ResizeObserver', class {

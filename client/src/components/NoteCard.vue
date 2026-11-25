@@ -25,7 +25,7 @@
         <button type="button" :disabled="!editable" @click.stop="attachPending(attachment.filename)">Attach link</button>
       </div>
     </div>
-    <div class="note-body" :aria-hidden="!active">
+    <div ref="body" class="note-body" :aria-hidden="!active">
       <MarkdownEditor v-if="raw" ref="editor" :model-value="note.content" :readonly="!editable" :aria-label="`Edit ${title}`" @update:model-value="edit" />
       <div v-else class="rendered" @click="openAsset" v-html="rendered" />
     </div>
@@ -34,10 +34,13 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, markRaw } from 'vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { markdown } from '@/markdown'
 import { downloadNoteAsset, noteAssetImageUrl, uploadNoteAsset, type AssetUploadProgress } from '@/api/assets'
+import { getViewState } from '@/view-state'
+
+type Presentation = 'hidden' | 'raw' | 'preview'
 
 type PendingAttachment = { filename: string; name: string; markdown: string }
 const assetPath = /^\.\.\/assets\/([0-9a-f-]{36}-[a-zA-Z0-9._-]{1,120})$/
@@ -46,14 +49,20 @@ export default defineComponent({
   components: { MarkdownEditor },
   props: { id: { type: String, required: true }, index: { type: Number, default: 0 }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean, browsing: Boolean },
   emits: ['activate'],
-  data() { return {
-    raw: this.startRaw, copyLabel: 'Copy', timer: 0, reloading: false, pendingContent: null as string | null,
-    uploading: false, uploadName: '', uploadIndex: 0, uploadTotal: 0,
-    uploadProgress: { stage: 'saving', percent: null } as AssetUploadProgress,
-    pendingAttachments: [] as PendingAttachment[], contentVersion: 0, disposed: false,
-    assetMessage: '', assetError: false, assetImageUrls: {} as Record<string, string>, imageGeneration: 0,
-  } },
+  data() {
+    const views = getViewState(this.$store)
+    const positions = markRaw(this.browsing ? views.home.notes : views.daily.notes)
+    const position = markRaw(positions.get(this.id) ?? { raw: this.startRaw, rawScroll: 0, previewScroll: 0 })
+    return {
+      positions, position, raw: position.raw, copyLabel: 'Copy', timer: 0, reloading: false, pendingContent: null as string | null,
+      uploading: false, uploadName: '', uploadIndex: 0, uploadTotal: 0,
+      uploadProgress: { stage: 'saving', percent: null } as AssetUploadProgress,
+      pendingAttachments: [] as PendingAttachment[], contentVersion: 0, disposed: false,
+      assetMessage: '', assetError: false, assetImageUrls: {} as Record<string, string>, imageGeneration: 0,
+    }
+  },
   computed: {
+    presentation(): Presentation { return !this.active ? 'hidden' : this.raw ? 'raw' : 'preview' },
     note(): any { return this.$store.state.notes[this.id] || { content: '', ISODateString: new Date().toISOString() } },
     title(): string { return this.note.content.split('\n').find((line: string) => line.trim())?.replace(/^#+\s*/, '') || 'Untitled note' },
     formattedDate(): string { return new Date(this.note.ISODateString).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) },
@@ -84,22 +93,60 @@ export default defineComponent({
     saveError(): string | null { return this.$store.state.saveErrors[this.id] || null },
   },
   watch: {
-    active(value: boolean) { if (value) this.focusEditor() },
-    raw(value: boolean) { if (value && this.active) this.focusEditor(); if (!value) this.refreshAssetImages() },
+    async presentation(value: Presentation, previous: Presentation) {
+      // The outgoing DOM is still visible in this pre-update watcher.
+      this.capturePosition(previous)
+      if (value === 'hidden') return
+      await this.$nextTick()
+      if (this.disposed || this.presentation !== value) return
+      if (value === 'raw') this.editor()?.focus()
+      this.restorePosition(value)
+    },
+    raw(value: boolean) { if (!value) this.refreshAssetImages() },
     'note.content': { flush: 'sync', handler() { this.contentVersion += 1 } },
     imageFilenames() { this.refreshAssetImages() },
     '$store.state.user.email'() { this.pendingAttachments = []; this.clearAssetImages(); this.refreshAssetImages() },
     id() { this.pendingAttachments = []; this.clearAssetImages(); this.refreshAssetImages() },
   },
-  mounted() { window.addEventListener('pagehide', this.flushPendingEdit); this.refreshAssetImages() },
+  mounted() {
+    window.addEventListener('pagehide', this.flushPendingEdit)
+    if (this.editable && this.presentation === 'raw' && this.position.editor) this.editor()?.focus()
+    this.restorePosition(this.presentation)
+    this.refreshAssetImages()
+  },
   beforeUnmount() {
+    this.capturePosition(this.presentation)
+    this.position.raw = this.raw
+    if (this.raw !== this.startRaw || this.position.editor || this.position.rawScroll || this.position.previewScroll) {
+      this.positions.set(this.id, this.position)
+    } else {
+      this.positions.delete(this.id)
+    }
     this.disposed = true
     this.clearAssetImages()
     window.removeEventListener('pagehide', this.flushPendingEdit)
     this.flushPendingEdit()
   },
   methods: {
-    focusEditor() { this.$nextTick(() => (this.$refs.editor as any)?.focus()) },
+    editor() { return this.$refs.editor as InstanceType<typeof MarkdownEditor> | undefined },
+    capturePosition(mode: Presentation) {
+      const body = this.$refs.body as HTMLElement
+      if (mode === 'raw') {
+        this.position.rawScroll = body.scrollTop
+        this.position.editor = this.editor()?.capturePosition?.()
+      } else if (mode === 'preview') {
+        this.position.previewScroll = body.scrollTop
+      }
+    },
+    restorePosition(mode: Presentation) {
+      const body = this.$refs.body as HTMLElement
+      if (mode === 'raw') {
+        if (this.position.editor) this.editor()?.restorePosition?.(this.position.editor)
+        body.scrollTop = this.position.rawScroll
+      } else if (mode === 'preview') {
+        body.scrollTop = this.position.previewScroll
+      }
+    },
     edit(content: string) {
       this.$store.commit('setNoteContent', { id: this.id, content })
       this.$store.commit('setNoteUnsaved', { id: this.id, value: true })

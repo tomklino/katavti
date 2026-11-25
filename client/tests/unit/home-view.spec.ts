@@ -11,6 +11,20 @@ const api = {
 }
 
 describe('All Notes reading feed', () => {
+  it('restores the feed scroll position on return', async () => {
+    const store = createStore(api as any, api as any)
+    const options = { global: { plugins: [store], stubs: { RouterLink: true, NoteCard: true } } }
+    const wrapper = mount(HomeView, options)
+    await vi.waitFor(() => expect(wrapper.find('.browsing-notes').exists()).toBe(true))
+    ;(wrapper.get('.browsing-notes').element as HTMLElement).scrollTop = 640
+    wrapper.unmount()
+
+    const returned = mount(HomeView, options)
+    try {
+      expect((returned.get('.browsing-notes').element as HTMLElement).scrollTop).toBe(640)
+    } finally { returned.unmount() }
+  })
+
   it('expands every note and keeps them expanded after filtering', async () => {
     const store = createStore(api as any, api as any)
     const wrapper = mount(HomeView, { global: { plugins: [store], stubs: { RouterLink: true, NoteCard: { props: { id: String, active: Boolean, browsing: Boolean }, template: '<article :data-id="id" :data-active="active" :data-browsing="browsing" />' } } } })
