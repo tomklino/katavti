@@ -2,7 +2,7 @@
   <main>
     <p v-if="$store.state.loading" class="view-message" role="status">Opening your notebook…</p>
     <p v-if="$store.state.error" class="error" role="alert">{{ $store.state.error }}</p>
-    <section v-if="$store.state.noteIds.length" class="notes browsing-notes" aria-label="Notes">
+    <section v-if="$store.state.noteIds.length" ref="notes" class="notes browsing-notes" aria-label="Notes">
       <NoteCard
         v-for="(id, index) in $store.state.noteIds"
         :id="id"
@@ -18,9 +18,28 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import NoteCard from '@/components/NoteCard.vue'
+import { getViewState } from '@/view-state'
+
 export default defineComponent({
   components: { NoteCard },
-  created() { this.$store.dispatch('loadNotes').catch(() => undefined) },
+  async mounted() {
+    const { scrollTop } = getViewState(this.$store).home
+    const notes = this.$refs.notes as HTMLElement | undefined
+    if (notes) notes.scrollTop = scrollTop
+    const initialScroll = notes?.scrollTop
+    await this.$store.dispatch('loadNotes').catch(() => undefined)
+    await this.$nextTick()
+    const refreshed = this.$refs.notes as HTMLElement | undefined
+    // If the cached feed couldn't restore the full offset, retry on the loaded
+    // feed, but don't override a scroll the reader made while it was loading.
+    if (refreshed && (refreshed !== notes || refreshed.scrollTop === initialScroll)) {
+      refreshed.scrollTop = scrollTop
+    }
+  },
+  beforeUnmount() {
+    const notes = this.$refs.notes as HTMLElement | undefined
+    getViewState(this.$store).home.scrollTop = notes?.scrollTop ?? 0
+  },
 })
 </script>
 <style scoped>

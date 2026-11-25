@@ -26,15 +26,22 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import NoteCard from '@/components/NoteCard.vue'
+import { getViewState } from '@/view-state'
+
 export default defineComponent({
   components: { NoteCard },
-  data: () => ({ active: 0, adding: false, error: '', maxVisible: 10000, resizeObserver: null as ResizeObserver | null }),
+  data() {
+    const daily = getViewState(this.$store).daily
+    const { dailyDate, dailyIds } = this.$store.state
+    const active = daily.date === dailyDate && daily.activeId ? dailyIds.indexOf(daily.activeId) : -1
+    return { active: Math.max(0, active), adding: false, error: '', maxVisible: 10000, resizeObserver: null as ResizeObserver | null }
+  },
   computed: {
     pageStart(): number { return Math.floor(this.active / this.maxVisible) * this.maxVisible },
     visibleDailyIds(): string[] { return this.$store.state.dailyIds.slice(this.pageStart, this.pageStart + this.maxVisible) },
   },
-  watch: { '$store.state.dailyDate'() { this.active = 0 } },
-  created() { this.loadDaily() },
+  watch: { '$store.state.dailyDate': 'resetForDay' },
+  created() { this.resetForDay(); this.loadDaily() },
   mounted() {
     if (typeof ResizeObserver === 'undefined') return
     this.resizeObserver = new ResizeObserver(([entry]) => {
@@ -42,8 +49,19 @@ export default defineComponent({
     })
     this.resizeObserver.observe(this.$refs.notes as HTMLElement)
   },
-  beforeUnmount() { this.resizeObserver?.disconnect() },
+  beforeUnmount() {
+    this.resizeObserver?.disconnect()
+    getViewState(this.$store).daily.activeId = this.$store.state.dailyIds[this.active]
+  },
   methods: {
+    resetForDay() {
+      const daily = getViewState(this.$store).daily
+      if (daily.date === this.$store.state.dailyDate) return
+      daily.date = this.$store.state.dailyDate
+      daily.activeId = undefined
+      daily.notes = new Map()
+      this.active = 0
+    },
     async loadDaily() {
       try {
         await this.$store.dispatch('loadDaily', 4)
