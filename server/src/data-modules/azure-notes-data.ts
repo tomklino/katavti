@@ -1,6 +1,7 @@
 import { BlobServiceClient, type ContainerClient } from '@azure/storage-blob'
 import { DefaultAzureCredential, ManagedIdentityCredential } from '@azure/identity'
-import { NotesError, type Note, type NotesData } from './notes-data.js'
+import { NotesError, type Note, type NotesData, type PinRequest } from './notes-data.js'
+import { calendarDate, dailyNotePath, findPins, pinPath, pinRecord, pinRequest } from './note-pins.js'
 import { checkRevision, staleNoteError } from './note-conflicts.js'
 import { validateAssetFilename, type AssetsData } from './assets-data.js'
 
@@ -37,7 +38,7 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
   function decodeNoteId(id: string) {
     let decoded: string
     try { decoded = decodeURIComponent(id) } catch { throw new NotesError('Invalid note ID', 400) }
-    if (!/^\d{4}\/[a-z]+\.d\/workspaces-\d{4}-\d{2}-\d{2}\/workspace-\d+\.md$/.test(decoded)) {
+    if (!dailyNotePath.test(decoded)) {
       throw new NotesError('Invalid note ID', 400)
     }
     return decoded
@@ -67,8 +68,7 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
   async function createDaily(userId: string, count: number, dateString?: string) {
     validateUserId(userId)
     if (!Number.isInteger(count) || count < 1 || count > 100) throw new NotesError('num must be an integer from 1 to 100', 400)
-    const date = dateString ? new Date(`${dateString}T00:00:00.000Z`) : now()
-    if (Number.isNaN(date.getTime()) || (dateString && (!/^\d{4}-\d{2}-\d{2}$/.test(dateString) || date.toISOString().slice(0, 10) !== dateString))) throw new NotesError('Invalid date', 400)
+    const date = calendarDate(dateString, now)
     await initialize()
     const directory = directoryFor(date)
     const prefix = `${userId}/${directory}/`
@@ -163,7 +163,7 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
     const matched: string[] = []
     for await (const blob of container.listBlobsFlat({ prefix })) {
       const id = blob.name.slice(prefix.length)
-      if (!/^\d{4}\/[a-z]+\.d\/workspaces-\d{4}-\d{2}-\d{2}\/workspace-\d+\.md$/.test(id)) continue
+      if (!dailyNotePath.test(id)) continue
       let content: string
       try { content = (await container.getBlockBlobClient(blob.name).downloadToBuffer()).toString('utf8') } catch { continue }
       if (query.bug) {
@@ -197,5 +197,68 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
     catch (error) { if (isNotFound(error)) throw new NotesError('Asset not found', 404); throw error }
   }
 
-  return { createDaily, read, update, list, importNote, uploadAsset, readAsset }
+  async function pinNote(userId: string, id: string, request: PinRequest) {
+    request = pinRequest(request)
+    const decoded = decodeNoteId(id)
+    await read(userId, id)
+    const weekStart = request.period === 'week' ? await rememberWeekStart(userId, request.weekStart!) : undefined
+    const name = `${userId}/${pinPath(decoded, { ...request, weekStart })}`
+    const record = pinRecord(decoded, request.date)
+    while (true) {
+      let current: Awaited<ReturnType<typeof downloadVersion>> | undefined
+      try { current = await downloadVersion(name) }
+      catch (error) { if (!isNotFound(error)) throw error }
+      if (current) {
+        try {
+          const existing = JSON.parse(current.content)
+          if (existing?.id === decoded && existing.date <= request.date) break
+        } catch { /* Replace malformed pin records. */ }
+      }
+      try {
+        await container.getBlockBlobClient(name).upload(record, Buffer.byteLength(record), {
+          conditions: current ? { ifMatch: current.revision } : { ifNoneMatch: '*' },
+        })
+        break
+      } catch (error: any) { if (error?.statusCode !== 409 && error?.statusCode !== 412) throw error }
+    }
+    return { id: encodeURIComponent(decoded), period: request.period }
+  }
+
+  async function listPins(userId: string, date?: string) {
+    validateUserId(userId)
+    const day = calendarDate(date, now)
+    await initialize()
+    return findPins(day, async directory => {
+      const prefix = `${userId}/${directory}/`
+      const names: string[] = []
+      for await (const blob of container.listBlobsFlat({ prefix })) names.push(blob.name.slice(prefix.length))
+      return names
+    }, async pin => {
+      try { return (await container.getBlockBlobClient(`${userId}/${pin}`).downloadToBuffer()).toString('utf8') }
+      catch (error) { if (!isNotFound(error)) throw error }
+    })
+  }
+
+  async function getWeekStart(userId: string) {
+    validateUserId(userId)
+    await initialize()
+    try {
+      const value = (await container.getBlockBlobClient(`${userId}/.week-start`).downloadToBuffer()).toString('utf8')
+      return value === 'sunday' || value === 'monday' ? value : null
+    } catch (error) { if (isNotFound(error)) return null; throw error }
+  }
+
+  async function rememberWeekStart(userId: string, start: 'sunday' | 'monday') {
+    const existing = await getWeekStart(userId)
+    if (existing) return existing
+    try {
+      await container.getBlockBlobClient(`${userId}/.week-start`).upload(start, start.length, { conditions: { ifNoneMatch: '*' } })
+      return start
+    } catch (error: any) {
+      if (error?.statusCode !== 409 && error?.statusCode !== 412) throw error
+      return await getWeekStart(userId) ?? start
+    }
+  }
+
+  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, listPins, getWeekStart }
 }

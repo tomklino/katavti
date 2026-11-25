@@ -155,7 +155,8 @@ describe('client-clock daily notes', () => {
     async function assertCreatedDay(response: Awaited<ReturnType<Page['waitForResponse']>>, date: string) {
       expect(response.status()).toBe(201)
       expect(new URL(response.url()).searchParams.get('date')).toBe(date)
-      const ids: string[] = await response.json()
+      const { ids, pins }: { ids: string[]; pins: unknown[] } = await response.json()
+      expect(pins).toEqual([])
       expect(ids).toHaveLength(4)
       for (const id of ids) {
         // These are actual API results, not localStorage or intercepted requests.

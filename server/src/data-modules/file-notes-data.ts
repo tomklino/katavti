@@ -1,7 +1,8 @@
 import path from 'node:path'
 import { lstat, mkdir, open, readFile, readdir, writeFile, rename, rm, link } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
-import { NotesError, type Note, type NotesData } from './notes-data.js'
+import { NotesError, type Note, type NotesData, type PinRequest } from './notes-data.js'
+import { calendarDate, dailyNotePath, findPins, pinPath, pinRecord, pinRequest } from './note-pins.js'
 import { checkRevision } from './note-conflicts.js'
 import { validateAssetFilename, type AssetsData } from './assets-data.js'
 
@@ -35,7 +36,7 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
   function notePath(userId: string, id: string) {
     let decoded: string
     try { decoded = decodeURIComponent(id) } catch { throw new NotesError('Invalid note ID', 400) }
-    if (!/^\d{4}\/[a-z]+\.d\/workspaces-\d{4}-\d{2}-\d{2}\/workspace-\d+\.md$/.test(decoded)) {
+    if (!dailyNotePath.test(decoded)) {
       throw new NotesError('Invalid note ID', 400)
     }
     const root = userDirectory(userId)
@@ -76,8 +77,7 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
 
   async function createDaily(userId: string, count: number, dateString?: string) {
     if (!Number.isInteger(count) || count < 1 || count > 100) throw new NotesError('num must be an integer from 1 to 100', 400)
-    const date = dateString ? new Date(`${dateString}T00:00:00.000Z`) : now()
-    if (Number.isNaN(date.getTime()) || (dateString && (!/^\d{4}-\d{2}-\d{2}$/.test(dateString) || date.toISOString().slice(0, 10) !== dateString))) throw new NotesError('Invalid date', 400)
+    const date = calendarDate(dateString, now)
     const relativeDirectory = directoryFor(date)
     const root = userDirectory(userId)
     const directory = path.join(root, relativeDirectory)
@@ -195,7 +195,7 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     let names: string[]
     try { names = await fs.readdir(root, { recursive: true }) }
     catch (error: any) { if (error?.code === 'ENOENT') return []; throw error }
-    const candidates = names.filter(name => /^\d{4}\/[a-z]+\.d\/workspaces-\d{4}-\d{2}-\d{2}\/workspace-\d+\.md$/.test(name))
+    const candidates = names.filter(name => dailyNotePath.test(name))
     const cutoff = new Date(now()); cutoff.setUTCDate(cutoff.getUTCDate() - (query.days ?? 5))
     const matched: string[] = []
     await Promise.all(candidates.map(async id => {
@@ -249,5 +249,68 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     }
   }
 
-  return { createDaily, read, update, list, importNote, uploadAsset, readAsset }
+  async function pinNote(userId: string, id: string, request: PinRequest) {
+    request = pinRequest(request)
+    const { decoded } = notePath(userId, id)
+    await read(userId, id)
+    const root = userDirectory(userId)
+    const weekStart = request.period === 'week' ? await rememberWeekStart(root, request.weekStart!) : undefined
+    const file = path.join(root, pinPath(decoded, { ...request, weekStart }))
+    await withWriteLock(root, file, async () => {
+      try {
+        const existing = JSON.parse(await fs.readFile(file, 'utf8'))
+        if (existing?.id === decoded && existing.date <= request.date) return
+      } catch (error: any) { if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error }
+      await replaceFile(file, pinRecord(decoded, request.date))
+    })
+    return { id: encodeURIComponent(decoded), period: request.period }
+  }
+
+  async function listPins(userId: string, date?: string) {
+    const root = userDirectory(userId)
+    return findPins(calendarDate(date, now), async directory => {
+      const resolved = path.join(root, directory)
+      await rejectSymlinkPath(root, resolved)
+      try { return await fs.readdir(resolved) }
+      catch (error: any) { if (error?.code === 'ENOENT') return []; throw error }
+    }, async pin => {
+      const resolved = path.join(root, pin)
+      await rejectSymlinkPath(root, resolved)
+      try { return await fs.readFile(resolved, 'utf8') }
+      catch (error: any) { if (error?.code !== 'ENOENT') throw error }
+    })
+  }
+
+  async function replaceFile(file: string, content: string) {
+    const temporary = `${file}.${randomUUID()}.tmp`
+    try {
+      await fs.writeFile(temporary, content, 'utf8')
+      await rename(temporary, file)
+    } finally { await rm(temporary, { force: true }) }
+  }
+
+  async function getWeekStart(userId: string) {
+    return readWeekStart(userDirectory(userId))
+  }
+
+  async function readWeekStart(root: string) {
+    const file = path.join(root, '.week-start')
+    await rejectSymlinkPath(root, file)
+    try {
+      const value = await fs.readFile(file, 'utf8')
+      return value === 'sunday' || value === 'monday' ? value : null
+    } catch (error: any) { if (error?.code === 'ENOENT') return null; throw error }
+  }
+
+  async function rememberWeekStart(root: string, start: 'sunday' | 'monday') {
+    const file = path.join(root, '.week-start')
+    return withWriteLock(root, file, async () => {
+      const existing = await readWeekStart(root)
+      if (existing) return existing
+      await replaceFile(file, start)
+      return start
+    })
+  }
+
+  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, listPins, getWeekStart }
 }

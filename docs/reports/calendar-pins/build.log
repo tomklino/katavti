@@ -1,0 +1,28 @@
+
+> katavti@0.3.2 build
+> npm run build:server && npm --prefix client run build
+
+
+> katavti@0.3.2 build:server
+> tsc -p server/tsconfig.json
+
+
+> client@0.2.3 build
+> vue-tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 116 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                       0.54 kB │ gzip:   0.34 kB
+dist/assets/DailyView-BBH9YEor.css    1.15 kB │ gzip:   0.44 kB
+dist/assets/index-CAEt12OB.css       20.57 kB │ gzip:   4.88 kB
+dist/assets/DailyView-CPgbdqOD.js     4.09 kB │ gzip:   1.72 kB
+dist/assets/index-1CU4Dg89.js       820.19 kB │ gzip: 293.92 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 7.53s

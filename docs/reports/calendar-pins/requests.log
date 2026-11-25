@@ -1,0 +1,54 @@
+
+[sunday@example.com opens 2026-07-18]
+>> PUT /api/v1beta/notes/daily?num=4&date=2026-07-18&includePins=true
+<< 201 {"ids":["2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-2.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-3.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-4.md"],"pins":[]}
+>> GET /api/v1beta/notes/pin-preference
+<< 200 {"weekStart":null}
+>> PUT /api/v1beta/notes/2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md/pin {"period":"week","date":"2026-07-18","weekStart":"sunday"}
+<< 200 {"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","period":"week"}
+>> PUT /api/v1beta/notes/2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-2.md/pin {"period":"month","date":"2026-07-18"}
+<< 200 {"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-2.md","period":"month"}
+>> PUT /api/v1beta/notes/2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-3.md/pin {"period":"year","date":"2026-07-18"}
+<< 200 {"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-3.md","period":"year"}
+
+[sunday@example.com opens 2026-07-18]
+>> PUT /api/v1beta/notes/daily?num=4&date=2026-07-18&includePins=true
+<< 201 {"ids":["2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-2.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-3.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-4.md"],"pins":[{"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","period":"week"},{"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-2.md","period":"month"},{"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-3.md","period":"year"}]}
+>> GET /api/v1beta/notes/pin-preference
+<< 200 {"weekStart":"sunday"}
+>> PUT /api/v1beta/notes/2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-4.md/pin {"period":"week","date":"2026-07-18","weekStart":"sunday"}
+<< 200 {"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-4.md","period":"week"}
+
+[sunday@example.com opens 2026-07-19]
+>> PUT /api/v1beta/notes/daily?num=4&date=2026-07-19&includePins=true
+<< 201 {"ids":["2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-1.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-2.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-3.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-4.md"],"pins":[{"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-2.md","period":"month"},{"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-3.md","period":"year"}]}
+
+[sunday@example.com opens 2026-08-01]
+>> PUT /api/v1beta/notes/daily?num=4&date=2026-08-01&includePins=true
+<< 201 {"ids":["2026%2Faugust.d%2Fworkspaces-2026-08-01%2Fworkspace-1.md","2026%2Faugust.d%2Fworkspaces-2026-08-01%2Fworkspace-2.md","2026%2Faugust.d%2Fworkspaces-2026-08-01%2Fworkspace-3.md","2026%2Faugust.d%2Fworkspaces-2026-08-01%2Fworkspace-4.md"],"pins":[{"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-3.md","period":"year"}]}
+
+[sunday@example.com opens 2027-01-01]
+>> PUT /api/v1beta/notes/daily?num=4&date=2027-01-01&includePins=true
+<< 201 {"ids":["2027%2Fjanuary.d%2Fworkspaces-2027-01-01%2Fworkspace-1.md","2027%2Fjanuary.d%2Fworkspaces-2027-01-01%2Fworkspace-2.md","2027%2Fjanuary.d%2Fworkspaces-2027-01-01%2Fworkspace-3.md","2027%2Fjanuary.d%2Fworkspaces-2027-01-01%2Fworkspace-4.md"],"pins":[]}
+
+[monday@example.com opens 2026-07-18]
+>> PUT /api/v1beta/notes/daily?num=4&date=2026-07-18&includePins=true
+<< 201 {"ids":["2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-2.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-3.md","2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-4.md"],"pins":[]}
+>> PUT /api/v1beta/notes/2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md/pin {"period":"week","date":"2026-07-18","weekStart":"monday"}
+<< 200 {"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","period":"week"}
+
+[monday@example.com opens 2026-07-19]
+>> PUT /api/v1beta/notes/daily?num=4&date=2026-07-19&includePins=true
+<< 201 {"ids":["2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-1.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-2.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-3.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-4.md"],"pins":[{"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","period":"week"}]}
+
+[monday@example.com opens 2026-07-20]
+>> PUT /api/v1beta/notes/daily?num=4&date=2026-07-20&includePins=true
+<< 201 {"ids":["2026%2Fjuly.d%2Fworkspaces-2026-07-20%2Fworkspace-1.md","2026%2Fjuly.d%2Fworkspaces-2026-07-20%2Fworkspace-2.md","2026%2Fjuly.d%2Fworkspaces-2026-07-20%2Fworkspace-3.md","2026%2Fjuly.d%2Fworkspaces-2026-07-20%2Fworkspace-4.md"],"pins":[]}
+>> PUT /api/v1beta/notes/2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md/pin {"period":"month","date":"2026-07-18"}
+<< 200 {"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","period":"month"}
+
+[browser-backup@example.com opens 2026-07-19]
+>> PUT /api/v1beta/notes/daily?num=4&date=2026-07-19&includePins=true
+<< 201 {"ids":["2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-1.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-2.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-3.md","2026%2Fjuly.d%2Fworkspaces-2026-07-19%2Fworkspace-4.md"],"pins":[{"id":"2026%2Fjuly.d%2Fworkspaces-2026-07-18%2Fworkspace-1.md","period":"month"}]}
+>> PUT /api/v1beta/notes/2026%2Fnovember.d%2Fworkspaces-2026-11-24%2Fworkspace-1.md/pin {"period":"year","date":"2026-11-25"}
+<< 200 {"id":"2026%2Fnovember.d%2Fworkspaces-2026-11-24%2Fworkspace-1.md","period":"year"}

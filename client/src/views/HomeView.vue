@@ -10,8 +10,10 @@
         :index="index"
         active
         browsing
+        @pinned="announcePin"
       />
     </section>
+    <p v-if="pinMessage" class="view-message" role="status">{{ pinMessage }} <router-link to="/daily">Open Daily</router-link></p>
     <section v-if="!$store.state.loading && !$store.state.error && !$store.state.noteIds.length" class="empty-state"><span aria-hidden="true">▤</span><p class="eyebrow">A LITTLE SPACE TO BEGIN</p><h2>{{ $store.state.bug ? 'No thoughts with that label.' : 'Your notebook starts here.' }}</h2><p>{{ $store.state.bug ? 'Try another exact label, or look back through your recent notes.' : 'An idea, a list, a few words about your day. Your first note can be anything.' }}</p><router-link to="/daily">Open today’s workspace <span aria-hidden="true">↗</span></router-link></section>
   </main>
 </template>
@@ -19,9 +21,14 @@
 import { defineComponent } from 'vue'
 import NoteCard from '@/components/NoteCard.vue'
 import { getViewState } from '@/view-state'
+import type { NotePin } from '@/api/notes'
 
 export default defineComponent({
   components: { NoteCard },
+  data: () => ({ pinMessage: '' }),
+  methods: {
+    announcePin(period: NotePin['period']) { this.pinMessage = `Pinned for the rest of this ${period}.` },
+  },
   async mounted() {
     const { scrollTop } = getViewState(this.$store).home
     const notes = this.$refs.notes as HTMLElement | undefined

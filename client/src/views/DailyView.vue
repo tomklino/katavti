@@ -11,9 +11,23 @@
         start-raw
         :active="pageStart + index === active"
         @activate="activate(pageStart + index)"
+        @pinned="announcePin"
+      />
+    </section>
+    <section v-if="pinnedNotes.length" class="pinned-notes" aria-label="Pinned notes">
+      <h2>Pinned notes</h2>
+      <NoteCard
+        v-for="({ id, label }, index) in pinnedNotes"
+        :id="id"
+        :key="id"
+        :index="index"
+        :pin-label="label"
+        :active="activePin === id"
+        @activate="activePin = id"
       />
     </section>
     <div class="daily-controls">
+      <span v-if="pinMessage" class="pin-message" role="status">{{ pinMessage }}</span>
       <nav v-if="$store.state.dailyIds.length > maxVisible" class="note-pages" aria-label="Daily note pages">
         <button :disabled="pageStart === 0" aria-label="Previous daily notes" @click="activate(pageStart - 1)">←</button>
         <span>{{ pageStart + 1 }}–{{ pageStart + visibleDailyIds.length }} / {{ $store.state.dailyIds.length }}</span>
@@ -27,6 +41,7 @@
 import { defineComponent } from 'vue'
 import NoteCard from '@/components/NoteCard.vue'
 import { getViewState } from '@/view-state'
+import type { NotePin } from '@/api/notes'
 
 export default defineComponent({
   components: { NoteCard },
@@ -34,11 +49,20 @@ export default defineComponent({
     const daily = getViewState(this.$store).daily
     const { dailyDate, dailyIds } = this.$store.state
     const active = daily.date === dailyDate && daily.activeId ? dailyIds.indexOf(daily.activeId) : -1
-    return { active: Math.max(0, active), adding: false, error: '', maxVisible: 10000, resizeObserver: null as ResizeObserver | null }
+    return { active: Math.max(0, active), activePin: '', pinMessage: '', adding: false, error: '', maxVisible: 10000, resizeObserver: null as ResizeObserver | null }
   },
   computed: {
     pageStart(): number { return Math.floor(this.active / this.maxVisible) * this.maxVisible },
     visibleDailyIds(): string[] { return this.$store.state.dailyIds.slice(this.pageStart, this.pageStart + this.maxVisible) },
+    pinnedNotes(): { id: string; label: string }[] {
+      const grouped = new Map<string, Set<NotePin['period']>>()
+      for (const { id, period } of this.$store.state.pins) {
+        if (!grouped.has(id)) grouped.set(id, new Set())
+        grouped.get(id)!.add(period)
+      }
+      const order = ['week', 'month', 'year'] as const
+      return [...grouped].map(([id, periods]) => ({ id, label: order.filter(period => periods.has(period)).map(period => period[0].toUpperCase() + period.slice(1)).join(' · ') }))
+    },
   },
   watch: { '$store.state.dailyDate': 'resetForDay' },
   created() { this.resetForDay(); this.loadDaily() },
@@ -61,7 +85,9 @@ export default defineComponent({
       daily.activeId = undefined
       daily.notes = new Map()
       this.active = 0
+      this.activePin = ''; this.pinMessage = ''
     },
+    announcePin(period: NotePin['period']) { this.pinMessage = `Pinned for the rest of this ${period}.` },
     async loadDaily() {
       try {
         await this.$store.dispatch('loadDaily', 4)
@@ -86,6 +112,10 @@ export default defineComponent({
 <style scoped>
 main { display: flex; flex-direction: column; }
 .notes { display: flex; flex: 1; flex-direction: column; gap: 6px; min-height: 0; overflow: hidden; }
+.pinned-notes { display: flex; flex: 0 0 auto; flex-direction: column; gap: 4px; max-height: 38%; overflow-y: auto; margin-top: 8px; }
+.pinned-notes h2 { color: var(--muted); font-size: 11px; font-weight: 600; margin: 0 0 2px; }
+.pinned-notes :deep(.note.active) { flex: 0 0 auto; min-height: 120px; max-height: 200px; }
+.pin-message { color: var(--muted); font-size: 11px; }
 .daily-controls { align-items: center; display: flex; flex-shrink: 0; gap: 10px; min-height: 32px; padding-top: 6px; }
 .note-pages { align-items: center; color: var(--muted); display: flex; font-size: 10px; gap: 8px; }
 .note-pages button { padding: 3px 8px; }
