@@ -16,7 +16,7 @@
       </div>
       <span v-else class="note-chevron" aria-hidden="true">↗</span>
     </header>
-    <dialog ref="pinDialog" class="pin-dialog" aria-label="Pin note" @click.stop @close="closePin">
+    <dialog ref="pinDialog" class="pin-dialog" aria-label="Pin note" @click.stop="onPinClick" @close="closePin">
       <h2>{{ pinStep === 'weekStart' ? 'When does your week start?' : 'Pin note' }}</h2>
       <p v-if="pinStep === 'weekStart'">We’ll remember this for future weekly pins.</p>
       <p v-else>{{ title }} · Pinned through the end of the selected period.</p>
@@ -222,6 +222,13 @@ export default defineComponent({
       window.removeEventListener('scroll', this.positionPin, true)
       this.pinDialogObserver?.disconnect()
       this.pinDialogObserver = null
+    },
+    onPinClick(event: MouseEvent) {
+      // Backdrop clicks target the dialog itself, as do clicks on its padding.
+      const dialog = this.$refs.pinDialog as HTMLDialogElement
+      if (event.target !== dialog) return
+      const { left, right, top, bottom } = dialog.getBoundingClientRect()
+      if (event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom) this.dismissPin()
     },
     dismissPin() { (this.$refs.pinDialog as HTMLDialogElement).close() },
     closePin() {

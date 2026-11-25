@@ -134,6 +134,49 @@ async function visiblePins(page: Page, titles: string[]) {
   if (!titles.length) expect(await pinned(page).count()).toBe(0)
 }
 
+it('dismisses the pin dialog on outside clicks but not clicks inside it', async () => {
+  const page = await device()
+  try {
+    await openDay(page, '2026-07-18')
+    const trigger = daily(page).locator('.note').first().getByRole('button', { name: 'Pin Untitled note', exact: true })
+    await trigger.click()
+    const box = await dialog(page).boundingBox()
+    if (!box) throw new Error('Missing pin dialog')
+
+    // The dialog's padding and contents are not the backdrop.
+    await page.mouse.click(box.x + 3, box.y + 3)
+    expect(await dialog(page).isVisible()).toBe(true)
+    await dialog(page).getByRole('heading', { name: 'Pin note' }).click()
+    expect(await dialog(page).isVisible()).toBe(true)
+
+    await page.mouse.click(1, 1)
+    await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+    expect(await trigger.evaluate(button => button === document.activeElement)).toBe(true)
+    expect(await pinned(page).count()).toBe(0)
+
+    // The pin button is also outside the modal; a click there closes it.
+    await trigger.click()
+    const triggerBox = await trigger.boundingBox()
+    if (!triggerBox) throw new Error('Missing pin button')
+    await page.mouse.click(triggerBox.x + triggerBox.width / 2, triggerBox.y + triggerBox.height / 2)
+    await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+
+    await trigger.click()
+    await dialog(page).getByRole('button', { name: 'This week' }).click()
+    await page.getByRole('heading', { name: 'When does your week start?' }).waitFor()
+    await page.mouse.click(1, 1)
+    await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+    expect(await pinned(page).count()).toBe(0)
+
+    await trigger.click()
+    await page.getByRole('heading', { name: 'Pin note' }).waitFor()
+    await dialog(page).getByRole('button', { name: 'Cancel' }).click()
+    await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+  } finally {
+    await page.context().close()
+  }
+}, 30_000)
+
 it('pins for calendar periods, remembers Sunday or Monday per account, and expires pins on a new device', async () => {
   const sunday = 'sunday@example.com'
   const page = await device(sunday)

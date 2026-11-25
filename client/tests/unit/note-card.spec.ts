@@ -58,6 +58,26 @@ describe('NoteCard focus states', () => {
     expect((wrapper.findAll('.rendered input[type="checkbox"]')[0].element as HTMLInputElement).checked).toBe(true)
   })
 
+  it('only dismisses the pin dialog for clicks outside its bounds', async () => {
+    const wrapper = mountCard(false)
+    const dialog = wrapper.get('dialog').element as HTMLDialogElement
+    dialog.showModal = () => { dialog.setAttribute('open', '') }
+    dialog.close = vi.fn(() => { dialog.removeAttribute('open'); dialog.dispatchEvent(new Event('close')) })
+    vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 100, 200, 150))
+    try {
+      await wrapper.get('.pin-button').trigger('click')
+      await wrapper.get('dialog').trigger('click', { clientX: 101, clientY: 101 })
+      await wrapper.get('dialog h2').trigger('click', { clientX: 150, clientY: 120 })
+      expect(dialog.close).not.toHaveBeenCalled()
+      expect(wrapper.emitted('activate')).toBeUndefined()
+
+      await wrapper.get('dialog').trigger('click', { clientX: 99, clientY: 101 })
+      expect(dialog.close).toHaveBeenCalledOnce()
+      expect(dialog.open).toBe(false)
+      expect(wrapper.emitted('activate')).toBeUndefined()
+    } finally { wrapper.unmount() }
+  })
+
   it('requests focus when clicked', async () => {
     const wrapper = mountCard(false)
     await wrapper.trigger('click')
