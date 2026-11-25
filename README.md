@@ -78,6 +78,10 @@ KATAVTI_UI_URL=http://localhost:8082 node scripts/ui-review.mjs
 
 The script uses a fresh, anonymous browser context, creates 12 mock notes through the editor, verifies persistence, theme preferences, expanded reading, non-scrolling Daily, header pagination, label filtering, and short/long label sizing from 320–1440px, and captures eleven views per theme (including the lookback menu and mobile labels). It does not touch your real browser notes or API notes. Set `CHROME_PATH` if Chrome is not in its standard location. The generated `final-light-*.png` and `final-dark-*.png` screenshots, mock-note export, and comparison gallery are in the Git-ignored `.ui-review/` directory; open `.ui-review/index.html` to compare them. Earlier prototype screenshots remain alongside them.
 
+### Pinning notes
+
+Use the pin icon on a note to pin it through the current week, month, or year. A note has one pin period: choosing another replaces it. The colored pin and adjacent label show the current period in Daily and All Notes. Open the pin menu again to change the period or choose **Unpin**. Pins expire at the end of the selected calendar period; weekly pins use your chosen first day of the week.
+
 ### Note attachments
 
 In **Daily**, click **Attach** to select one or more files of any type (up to 50 MiB per file). Upload status appears immediately with the filename, file count, and progress; authenticated uploads report the percentage of bytes sent and show when server storage is finishing. The editor stays usable. If the note changes during upload (even if the edits are undone), the uploaded file is held behind an **Attach link** button instead of being inserted automatically. In Raw mode automatic insertion or clicking **Attach link** inserts at the current cursor; in Preview it appends. Pictures use Markdown image syntax and display in Preview; other files use plain links. Click a link in Preview, including in **All notes**, to download the original file. Duplicate filenames receive different UUIDs.

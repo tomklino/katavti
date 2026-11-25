@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { NotesData } from '../../data-modules/notes-data.js'
-import { pinRequest } from '../../data-modules/note-pins.js'
+import { calendarDate, pinRequest } from '../../data-modules/note-pins.js'
 
 type Variables = { userId: string }
 
@@ -19,10 +19,18 @@ export function noteRoutes(service: NotesData) {
     return c.json(await service.importNote(c.get('userId'), body.id, body.content), 201)
   })
   routes.get('/pin-preference', async c => c.json({ weekStart: await service.getWeekStart(c.get('userId')) }))
+  routes.get('/pins', async c => c.json(await service.listPins(c.get('userId'), c.req.query('date'))))
   routes.put('/:id/pin', async c => {
     let body: unknown
     try { body = await c.req.json() } catch { return c.json({ error: 'Expected a JSON body' }, 400) }
     return c.json(await service.pinNote(c.get('userId'), c.req.param('id'), pinRequest(body)))
+  })
+  routes.delete('/:id/pin', async c => {
+    const date = c.req.query('date')
+    if (!date) return c.json({ error: 'A pin date is required' }, 400)
+    calendarDate(date, () => new Date())
+    await service.unpinNote(c.get('userId'), c.req.param('id'), date)
+    return c.json({ ok: true })
   })
   routes.get('/:id', async c => c.json(await service.read(c.get('userId'), c.req.param('id'))))
   routes.post('/:id', async c => {

@@ -68,14 +68,21 @@ export function createLocalNotesApi(storage: Storage = localStorage): NotesApi {
     },
     async loadDaily(count, date) {
       const ids = await this.createDaily(count, date)
-      const pins = readLocalPins(storage).filter(pin => pin.date <= date && date < pin.end)
-        .map(({ id, period }) => ({ id, period }))
-      return { ids, pins }
+      return { ids, pins: await this.listPins!(date) }
+    },
+    async listPins(date) {
+      const latest = new Map(readLocalPins(storage).filter(pin => pin.date <= date).map(pin => [pin.id, pin]))
+      return [...latest.values()].filter(pin => date < pin.end).map(({ id, period }) => ({ id, period }))
     },
     async getWeekStart() { return { weekStart: localWeekStart(storage) } },
     async pinNote(id, request) {
       await this.read(id)
       return pinLocally(storage, id, request)
+    },
+    async unpinNote(id) {
+      await this.read(id)
+      writeLocalPins(storage, readLocalPins(storage).filter(pin => pin.id !== id))
+      return { ok: true }
     },
   }
 }
@@ -109,7 +116,9 @@ export async function backUpLocalNotes(remote: NotesApi, storage: Storage = loca
     await backUpStoredAssets(owner, storage)
     if (remote.pinNote) {
       const pins = readLocalPins(storage)
-      for (const pin of pins) {
+      // Older versions allowed several pins per note. Only back up the latest.
+      const latest = new Map(pins.map(pin => [pin.id, pin]))
+      for (const pin of latest.values()) {
         const id = readStorage(storage)[pin.id]?.backedUpId
         if (!id || pin.backedUpTo?.[owner] === id) continue
         await remote.pinNote(id, { period: pin.period, date: pin.date, weekStart: pin.weekStart })
@@ -156,6 +165,8 @@ export function createSyncedNotesApi(local: NotesApi, remote: NotesApi): NotesAp
       return { ids: [...new Set([...localIds, ...remoteDaily.ids])], pins: remoteDaily.pins }
     },
     getWeekStart: remote.getWeekStart,
+    listPins: remote.listPins,
     pinNote: remote.pinNote,
+    unpinNote: remote.unpinNote,
   }
 }

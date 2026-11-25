@@ -4,8 +4,8 @@
       <span class="note-number" aria-hidden="true">{{ (index + 1).toString().padStart(2, '0') }}</span>
       <div class="note-heading"><strong>{{ title }}</strong><time v-if="active">{{ formattedDate }}<span> / {{ pinLabel || (editable ? 'Daily note' : 'From your notebook') }}</span></time></div>
       <span v-if="label" class="note-label">{{ label }}</span>
-      <span v-if="pinLabel" class="note-label pin-label">{{ pinLabel }}</span>
-      <button v-if="!pinLabel" ref="pinButton" type="button" class="pin-button" :aria-label="`Pin ${title}`" aria-haspopup="dialog" @click.stop="openPin">
+      <span v-if="pinPeriod" class="note-label pin-label">{{ pinPeriod[0].toUpperCase() + pinPeriod.slice(1) }}</span>
+      <button ref="pinButton" type="button" class="pin-button" :class="{ pinned: pinPeriod }" :aria-label="`Pin ${title}`" :aria-pressed="Boolean(pinPeriod)" aria-haspopup="dialog" @click.stop="openPin">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h-5l-1 6-4 4v2h13v-2l-3-4V3ZM12.5 15v6" /></svg>
       </button>
       <div v-if="active" class="actions">
@@ -26,10 +26,11 @@
           <button type="button" :disabled="pinning" @click="pin('week', 'monday')">Monday</button>
         </template>
         <template v-else>
-          <button type="button" :disabled="pinning" @click="pin('week')">This week</button>
-          <button type="button" :disabled="pinning" @click="pin('month')">This month</button>
-          <button type="button" :disabled="pinning" @click="pin('year')">This year</button>
+          <button type="button" :disabled="pinning" :aria-pressed="pinPeriod === 'week'" @click="pin('week')">This week</button>
+          <button type="button" :disabled="pinning" :aria-pressed="pinPeriod === 'month'" @click="pin('month')">This month</button>
+          <button type="button" :disabled="pinning" :aria-pressed="pinPeriod === 'year'" @click="pin('year')">This year</button>
         </template>
+        <button v-if="pinPeriod" type="button" :disabled="pinning" @click="unpin">Unpin</button>
         <button type="button" @click="dismissPin">Cancel</button>
       </div>
       <p v-if="pinError" role="alert">{{ pinError }}</p>
@@ -71,7 +72,7 @@ const assetPath = /^\.\.\/assets\/([0-9a-f-]{36}-[a-zA-Z0-9._-]{1,120})$/
 export default defineComponent({
   components: { MarkdownEditor },
   props: { id: { type: String, required: true }, index: { type: Number, default: 0 }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean, browsing: Boolean, pinLabel: String },
-  emits: ['activate', 'pinned'],
+  emits: ['activate', 'pinned', 'unpinned'],
   data() {
     const views = getViewState(this.$store)
     const positions = markRaw(this.pinLabel ? new Map() as typeof views.daily.notes : this.browsing ? views.home.notes : views.daily.notes)
@@ -88,6 +89,7 @@ export default defineComponent({
   },
   computed: {
     presentation(): Presentation { return !this.active ? 'hidden' : this.raw ? 'raw' : 'preview' },
+    pinPeriod(): NotePin['period'] | undefined { return this.$store.state.pins.find((pin: NotePin) => pin.id === this.id)?.period },
     note(): any { return this.$store.state.notes[this.id] || { content: '', ISODateString: new Date().toISOString() } },
     title(): string { return this.note.content.split('\n').find((line: string) => line.trim())?.replace(/^#+\s*/, '') || 'Untitled note' },
     formattedDate(): string { return new Date(this.note.ISODateString).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) },
@@ -236,6 +238,15 @@ export default defineComponent({
       const button = this.$refs.pinButton as HTMLButtonElement | undefined
       button?.focus()
     },
+    async unpin() {
+      if (this.pinning) return
+      this.pinning = true; this.pinError = ''
+      try {
+        await this.$store.dispatch('unpinNote', this.id)
+        if (!this.disposed) { this.dismissPin(); this.$emit('unpinned') }
+      } catch (error) { this.pinError = (error as Error).message || 'Unable to unpin this note.' }
+      finally { this.pinning = false }
+    },
     async pin(period: NotePin['period'], start?: WeekStart) {
       if (this.pinning) return
       this.pinning = true; this.pinError = ''
@@ -371,6 +382,7 @@ time span { opacity: .8; }
 .note-chevron { color: var(--muted); font-size: 15px; margin-left: 8px; }
 .pin-button { align-items: center; background: transparent; border-color: transparent; color: var(--muted); display: flex; justify-content: center; min-height: 24px; min-width: 26px; padding: 3px; }
 .pin-button:hover { border-color: var(--line); color: var(--accent); }
+.pin-button.pinned { color: var(--accent); }
 .pin-dialog { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--note-shadow); box-sizing: border-box; color: var(--text); inset: auto; margin: 0; max-height: calc(100% - 16px); max-width: calc(100% - 16px); padding: 18px; position: fixed; width: 380px; }
 .pin-dialog::backdrop { background: rgb(15 23 42 / .45); }
 .pin-dialog h2 { font-size: 16px; margin: 0 0 8px; }

@@ -7,7 +7,7 @@ export type NotePin = { id: string; period: 'week' | 'month' | 'year' }
 export type PinRequest = { period: NotePin['period']; date: string; weekStart?: WeekStart }
 export type DailyNotes = { ids: string[]; pins: NotePin[] }
 type FullNotesApi = ReturnType<typeof createNotesApi>
-type PinMethods = 'pinNote' | 'loadDaily' | 'getWeekStart'
+type PinMethods = 'pinNote' | 'unpinNote' | 'listPins' | 'loadDaily' | 'getWeekStart'
 export type NotesApi = Omit<FullNotesApi, PinMethods> & Partial<Pick<FullNotesApi, PinMethods>>
 
 export function createNotesApi(baseUrl = import.meta.env.VITE_API_URL || '') {
@@ -30,7 +30,9 @@ export function createNotesApi(baseUrl = import.meta.env.VITE_API_URL || '') {
     createDaily: (count: number, date: string) => request<string[]>(`/notes/daily?num=${count}&date=${date}`, { method: 'PUT' }),
     loadDaily: (count: number, date: string) => request<DailyNotes>(`/notes/daily?num=${count}&date=${date}&includePins=true`, { method: 'PUT' }),
     getWeekStart: () => request<{ weekStart: WeekStart | null }>('/notes/pin-preference'),
+    listPins: (date: string) => request<NotePin[]>(`/notes/pins?date=${date}`),
     pinNote: (id: string, pin: PinRequest) => request<NotePin>(`/notes/${id}/pin`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(pin) }),
+    unpinNote: (id: string, date: string) => request<{ ok: boolean }>(`/notes/${id}/pin?date=${date}`, { method: 'DELETE' }),
   }
 }
 

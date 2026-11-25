@@ -29,9 +29,7 @@ export function pinLocally(storage: Storage, id: string, { period, date, weekSta
   } else if (period === 'month') end.setUTCMonth(end.getUTCMonth() + 1, 1)
   else end.setUTCFullYear(end.getUTCFullYear() + 1, 0, 1)
   const expires = end.toISOString().slice(0, 10)
-  const pins = readLocalPins(storage)
-  if (!pins.some(pin => pin.id === id && pin.period === period && pin.end === expires)) {
-    writeLocalPins(storage, [...pins, { id, period, date, end: expires, weekStart }])
-  }
+  const pins = readLocalPins(storage).filter(pin => pin.id !== id)
+  writeLocalPins(storage, [...pins, { id, period, date, end: expires, weekStart }])
   return { id, period }
 }

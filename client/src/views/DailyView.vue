@@ -12,6 +12,7 @@
         :active="pageStart + index === active"
         @activate="activate(pageStart + index)"
         @pinned="announcePin"
+        @unpinned="pinMessage = 'Note unpinned.'"
       />
     </section>
     <section v-if="pinnedNotes.length" class="pinned-notes" aria-label="Pinned notes">
@@ -24,6 +25,8 @@
         :pin-label="label"
         :active="activePin === id"
         @activate="activePin = id"
+        @pinned="announcePin"
+        @unpinned="pinMessage = 'Note unpinned.'"
       />
     </section>
     <div class="daily-controls">
@@ -55,13 +58,7 @@ export default defineComponent({
     pageStart(): number { return Math.floor(this.active / this.maxVisible) * this.maxVisible },
     visibleDailyIds(): string[] { return this.$store.state.dailyIds.slice(this.pageStart, this.pageStart + this.maxVisible) },
     pinnedNotes(): { id: string; label: string }[] {
-      const grouped = new Map<string, Set<NotePin['period']>>()
-      for (const { id, period } of this.$store.state.pins) {
-        if (!grouped.has(id)) grouped.set(id, new Set())
-        grouped.get(id)!.add(period)
-      }
-      const order = ['week', 'month', 'year'] as const
-      return [...grouped].map(([id, periods]) => ({ id, label: order.filter(period => periods.has(period)).map(period => period[0].toUpperCase() + period.slice(1)).join(' · ') }))
+      return this.$store.state.pins.map(({ id, period }: NotePin) => ({ id, label: period[0].toUpperCase() + period.slice(1) }))
     },
   },
   watch: { '$store.state.dailyDate': 'resetForDay' },

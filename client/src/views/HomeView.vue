@@ -11,6 +11,7 @@
         active
         browsing
         @pinned="announcePin"
+        @unpinned="pinMessage = 'Note unpinned.'"
       />
     </section>
     <p v-if="pinMessage" class="view-message" role="status">{{ pinMessage }} <router-link to="/daily">Open Daily</router-link></p>

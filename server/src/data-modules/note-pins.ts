@@ -54,13 +54,11 @@ function bucketFor(date: Date, period: NotePin['period'], weekStart?: WeekStart)
   return { directory: weekDirectory(date, weekStart), prefix: `${weekStart}-`, period }
 }
 
-export function pinPath(decodedId: string, request: PinRequest) {
-  const bucket = bucketFor(calendarDate(request.date, () => new Date()), request.period, request.weekStart)
-  const [, month, day, file] = decodedId.split('/')
-  return `${bucket.directory}/${bucket.prefix}${day.slice('workspaces-'.length)}-${month.slice(0, -2)}-${file.slice(0, -3)}.pin`
-}
+export function pinStatePath(decodedId: string) { return `.pin-state/${encodeURIComponent(decodedId)}.json` }
 
-export function pinRecord(id: string, date: string) { return JSON.stringify({ id, date }) }
+export function pinStateRecord(id: string, date: string, period: NotePin['period'] | null, weekStart?: WeekStart) {
+  return JSON.stringify({ id, date, period, weekStart })
+}
 
 function activePin(record: string | undefined, day: string) {
   if (!record) return undefined
@@ -81,11 +79,27 @@ export async function findPins(date: Date, list: (directory: string) => Promise<
     const records = await Promise.all(names.filter(name => pattern.test(name)).sort().map(name => read(`${directory}/${name}`)))
     return [...new Set(records.map(record => activePin(record, day)))].flatMap(id => id ? [{ id: encodeURIComponent(id), period }] : [])
   }))
-  const seen = new Set<string>()
-  return groups.flat().filter(({ id, period }) => {
-    const key = `${period}:${id}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  // Older installations may have several calendar-bucket pins for a note.
+  // A per-note state supersedes all of them, including after expiry or unpin.
+  const pins = new Map(groups.flat().map(pin => [pin.id, pin]))
+  const states = await list('.pin-state')
+  for (const name of states.filter(name => name.endsWith('.json')).sort()) {
+    const record = await read(`.pin-state/${name}`)
+    if (!record) continue
+    try {
+      const { id, date: start, period, weekStart } = JSON.parse(record)
+      if (typeof id !== 'string' || !dailyNotePath.test(id) || name !== `${encodeURIComponent(id)}.json`) continue
+      if (typeof start !== 'string' || calendarDate(start, () => date).toISOString().slice(0, 10) > day) continue
+      if (period !== null && period !== 'week' && period !== 'month' && period !== 'year') continue
+      if (period === 'week' && weekStart !== 'sunday' && weekStart !== 'monday') continue
+      const encoded = encodeURIComponent(id)
+      pins.delete(encoded)
+      if (period !== null) {
+        const startBucket = bucketFor(calendarDate(start, () => date), period, weekStart)
+        const currentBucket = bucketFor(date, period, weekStart)
+        if (startBucket.directory === currentBucket.directory && startBucket.prefix === currentBucket.prefix) pins.set(encoded, { id: encoded, period })
+      }
+    } catch { /* Ignore malformed state records. */ }
+  }
+  return [...pins.values()]
 }
