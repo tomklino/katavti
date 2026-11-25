@@ -79,6 +79,19 @@ const pinned = (page: Page) => page.getByRole('region', { name: 'Pinned notes' }
 const daily = (page: Page) => page.getByRole('region', { name: 'Daily notes' })
 const dialog = (page: Page) => page.getByRole('dialog', { name: 'Pin note' })
 
+async function expectAnchoredPin(page: Page, trigger: ReturnType<Page['locator']>, side: 'above' | 'below') {
+  await expect.poll(async () => {
+    const anchor = await trigger.boundingBox()
+    const box = await dialog(page).boundingBox()
+    if (!anchor || !box) return false
+    const { width, height } = page.viewportSize()!
+    const gap = side === 'above' ? anchor.y - (box.y + box.height) : box.y - (anchor.y + anchor.height)
+    return gap >= 5 && gap <= 7 && box.x >= 7 && box.y >= 7
+      && box.x + box.width <= width - 7 && box.y + box.height <= height - 7
+      && box.x <= anchor.x + anchor.width && box.x + box.width >= anchor.x
+  }).toBe(true)
+}
+
 async function openDay(page: Page, date: string, email?: string) {
   await page.clock.setFixedTime(new Date(`${date}T12:00:00Z`))
   const loading = email ? page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).searchParams.get('includePins') === 'true') : undefined
@@ -125,12 +138,24 @@ it('pins for calendar periods, remembers Sunday or Monday per account, and expir
   const sunday = 'sunday@example.com'
   const page = await device(sunday)
   await openDay(page, '2026-07-18', sunday)
+  const bottomPin = daily(page).locator('.note').last().getByRole('button', { name: 'Pin Untitled note', exact: true })
+  await bottomPin.click()
+  await page.setViewportSize({ width: 320, height: 600 })
+  await expectAnchoredPin(page, bottomPin, 'above')
+  await screenshot(page, '14-mobile-pin-menu')
+  await page.keyboard.press('Escape')
+  await dialog(page).waitFor({ state: 'hidden' })
+  expect(await bottomPin.evaluate(button => button === document.activeElement)).toBe(true)
+  await page.setViewportSize({ width: 1280, height: 800 })
   await openPin(page, 0, 'Weekly planning')
+  const weeklyPin = daily(page).getByRole('button', { name: 'Pin Weekly planning', exact: true })
+  await expectAnchoredPin(page, weeklyPin, 'below')
   await screenshot(page, '01-pin-options')
   const preference = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/pin-preference'))
   await dialog(page).getByRole('button', { name: 'This week' }).click()
   await page.getByRole('heading', { name: 'When does your week start?' }).waitFor()
   await log(await preference)
+  await expectAnchoredPin(page, weeklyPin, 'below')
   await screenshot(page, '02-first-week-preference')
   await pin(page, 'Sunday', 'week')
   await openPin(page, 1, 'July checklist')

@@ -6,8 +6,8 @@ Use the pin icon on any original Daily or All notes card to pin it for the rest 
 
 | Case | Screenshot |
 | --- | --- |
-| Pin icon and week/month/year options | [01 — Pin options](screenshots/01-pin-options.png) |
-| First weekly pin asks Sunday or Monday | [02 — Week-start selector](screenshots/02-first-week-preference.png) |
+| Week/month/year options open next to the clicked pin | [01 — Pin options](screenshots/01-pin-options.png) |
+| First weekly pin asks Sunday or Monday in the same anchored dialog | [02 — Week-start selector](screenshots/02-first-week-preference.png) |
 | All three periods below the daily notes; yearly note expanded | [03 — Daily with pins](screenshots/03-all-periods-expanded.png) |
 | Same workspace on mobile | [04 — Mobile](screenshots/04-mobile-pins.png) |
 | Another device reuses the saved week start without showing the selector | [05 — Preference reused](screenshots/05-week-preference-reused.png) |
@@ -19,6 +19,7 @@ Use the pin icon on any original Daily or All notes card to pin it for the rest 
 | Anonymous pin survives a reload | [11 — Anonymous reload](screenshots/11-anonymous-pin-reloaded.png) |
 | Anonymous pin backed up at sign-in and visible on a second browser | [12 — Sign-in backup](screenshots/12-anonymous-pin-backed-up.png) |
 | Older note pinned from All notes | [13 — History](screenshots/13-pin-from-history.png) |
+| On a narrow viewport, the dialog opens above a pin near the bottom edge | [14 — Mobile pin options](screenshots/14-mobile-pin-menu.png) |
 
 ## HTTP and storage evidence
 

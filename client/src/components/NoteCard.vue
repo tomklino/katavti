@@ -83,6 +83,7 @@ export default defineComponent({
       pendingAttachments: [] as PendingAttachment[], contentVersion: 0, disposed: false,
       assetMessage: '', assetError: false, assetImageUrls: {} as Record<string, string>, imageGeneration: 0,
       pinStep: 'period' as 'period' | 'weekStart', pinning: false, pinError: '',
+      pinDialogObserver: null as ResizeObserver | null,
     }
   },
   computed: {
@@ -149,6 +150,7 @@ export default defineComponent({
     this.disposed = true
     this.clearAssetImages()
     window.removeEventListener('pagehide', this.flushPendingEdit)
+    this.stopPositioningPin()
     this.flushPendingEdit()
   },
   methods: {
@@ -190,9 +192,43 @@ export default defineComponent({
       this.pinStep = 'period'; this.pinError = ''
       const dialog = this.$refs.pinDialog as HTMLDialogElement
       dialog.showModal()
+      this.positionPin()
+      window.addEventListener('resize', this.positionPin)
+      window.addEventListener('scroll', this.positionPin, true)
+      if (typeof ResizeObserver !== 'undefined') {
+        this.pinDialogObserver = new ResizeObserver(this.positionPin)
+        this.pinDialogObserver.observe(dialog)
+      }
+    },
+    positionPin() {
+      const dialog = this.$refs.pinDialog as HTMLDialogElement | undefined
+      const button = this.$refs.pinButton as HTMLButtonElement | undefined
+      if (!dialog?.open || !button) return
+      const anchor = button.getBoundingClientRect()
+      const { width, height } = dialog.getBoundingClientRect()
+      const { clientWidth, clientHeight } = document.documentElement
+      const edge = 8
+      const gap = 6
+      const below = anchor.bottom + gap
+      const above = anchor.top - gap - height
+      const fitsBelow = below + height <= clientHeight - edge
+      const fitsAbove = above >= edge
+      const top = fitsBelow || (!fitsAbove && clientHeight - anchor.bottom >= anchor.top) ? below : above
+      dialog.style.left = `${Math.max(edge, Math.min(anchor.right - width, clientWidth - width - edge))}px`
+      dialog.style.top = `${Math.max(edge, Math.min(top, clientHeight - height - edge))}px`
+    },
+    stopPositioningPin() {
+      window.removeEventListener('resize', this.positionPin)
+      window.removeEventListener('scroll', this.positionPin, true)
+      this.pinDialogObserver?.disconnect()
+      this.pinDialogObserver = null
     },
     dismissPin() { (this.$refs.pinDialog as HTMLDialogElement).close() },
-    closePin() { (this.$refs.pinButton as HTMLButtonElement | undefined)?.focus() },
+    closePin() {
+      this.stopPositioningPin()
+      const button = this.$refs.pinButton as HTMLButtonElement | undefined
+      button?.focus()
+    },
     async pin(period: NotePin['period'], start?: WeekStart) {
       if (this.pinning) return
       this.pinning = true; this.pinError = ''
@@ -328,7 +364,7 @@ time span { opacity: .8; }
 .note-chevron { color: var(--muted); font-size: 15px; margin-left: 8px; }
 .pin-button { align-items: center; background: transparent; border-color: transparent; color: var(--muted); display: flex; justify-content: center; min-height: 24px; min-width: 26px; padding: 3px; }
 .pin-button:hover { border-color: var(--line); color: var(--accent); }
-.pin-dialog { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--note-shadow); color: var(--text); max-width: min(380px, calc(100vw - 34px)); padding: 18px; }
+.pin-dialog { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--note-shadow); box-sizing: border-box; color: var(--text); inset: auto; margin: 0; max-height: calc(100% - 16px); max-width: calc(100% - 16px); padding: 18px; position: fixed; width: 380px; }
 .pin-dialog::backdrop { background: rgb(15 23 42 / .45); }
 .pin-dialog h2 { font-size: 16px; margin: 0 0 8px; }
 .pin-dialog p { color: var(--muted); font-size: 13px; margin: 0 0 12px; overflow-wrap: anywhere; }
