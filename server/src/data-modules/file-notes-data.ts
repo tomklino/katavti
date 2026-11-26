@@ -305,6 +305,15 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     } catch (error: any) { if (error?.code === 'ENOENT') return null; throw error }
   }
 
+  async function setWeekStart(userId: string, start: 'sunday' | 'monday') {
+    const root = userDirectory(userId)
+    const file = path.join(root, '.week-start')
+    return withWriteLock(root, file, async () => {
+      await replaceFile(file, start)
+      return start
+    })
+  }
+
   async function rememberWeekStart(root: string, start: 'sunday' | 'monday') {
     const file = path.join(root, '.week-start')
     return withWriteLock(root, file, async () => {
@@ -315,5 +324,5 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     })
   }
 
-  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, unpinNote, listPins, getWeekStart }
+  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, unpinNote, listPins, getWeekStart, setWeekStart }
 }

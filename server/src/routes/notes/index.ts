@@ -19,6 +19,12 @@ export function noteRoutes(service: NotesData) {
     return c.json(await service.importNote(c.get('userId'), body.id, body.content), 201)
   })
   routes.get('/pin-preference', async c => c.json({ weekStart: await service.getWeekStart(c.get('userId')) }))
+  routes.put('/pin-preference', async c => {
+    let body: any
+    try { body = await c.req.json() } catch { return c.json({ error: 'Expected a JSON body' }, 400) }
+    if (body?.weekStart !== 'sunday' && body?.weekStart !== 'monday') return c.json({ error: 'weekStart must be sunday or monday' }, 400)
+    return c.json({ weekStart: await service.setWeekStart(c.get('userId'), body.weekStart) })
+  })
   routes.get('/pins', async c => c.json(await service.listPins(c.get('userId'), c.req.query('date'))))
   routes.put('/:id/pin', async c => {
     let body: unknown

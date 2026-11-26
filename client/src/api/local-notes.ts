@@ -75,6 +75,7 @@ export function createLocalNotesApi(storage: Storage = localStorage): NotesApi {
       return [...latest.values()].filter(pin => date < pin.end).map(({ id, period }) => ({ id, period }))
     },
     async getWeekStart() { return { weekStart: localWeekStart(storage) } },
+    async setWeekStart(weekStart) { storage.setItem('katavti.week-start', weekStart); return { weekStart } },
     async pinNote(id, request) {
       await this.read(id)
       return pinLocally(storage, id, request)
@@ -165,6 +166,7 @@ export function createSyncedNotesApi(local: NotesApi, remote: NotesApi): NotesAp
       return { ids: [...new Set([...localIds, ...remoteDaily.ids])], pins: remoteDaily.pins }
     },
     getWeekStart: remote.getWeekStart,
+    setWeekStart: remote.setWeekStart,
     listPins: remote.listPins,
     pinNote: remote.pinNote,
     unpinNote: remote.unpinNote,

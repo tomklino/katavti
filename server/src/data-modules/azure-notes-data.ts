@@ -240,6 +240,13 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
     } catch (error) { if (isNotFound(error)) return null; throw error }
   }
 
+  async function setWeekStart(userId: string, start: 'sunday' | 'monday') {
+    validateUserId(userId)
+    await initialize()
+    await container.getBlockBlobClient(`${userId}/.week-start`).upload(start, start.length)
+    return start
+  }
+
   async function rememberWeekStart(userId: string, start: 'sunday' | 'monday') {
     const existing = await getWeekStart(userId)
     if (existing) return existing
@@ -252,5 +259,5 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
     }
   }
 
-  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, unpinNote, listPins, getWeekStart }
+  return { createDaily, read, update, list, importNote, uploadAsset, readAsset, pinNote, unpinNote, listPins, getWeekStart, setWeekStart }
 }
