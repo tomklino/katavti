@@ -19,4 +19,5 @@ export type NotesData = {
   unpinNote(userId: string, id: string, date: string): Promise<void>
   listPins(userId: string, date?: string): Promise<NotePin[]>
   getWeekStart(userId: string): Promise<WeekStart | null>
+  setWeekStart(userId: string, start: WeekStart): Promise<WeekStart>
 }

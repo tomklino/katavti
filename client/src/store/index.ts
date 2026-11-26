@@ -124,6 +124,9 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
       async getWeekStart({ state }): Promise<WeekStart | null> {
         return (await selectedApi(state).getWeekStart?.())?.weekStart ?? null
       },
+      async setWeekStart({ state }, weekStart: WeekStart): Promise<WeekStart> {
+        return (await selectedApi(state).setWeekStart?.(weekStart))?.weekStart ?? weekStart
+      },
       async pinNote({ state, commit }, { id, period, weekStart }: NotePin & { weekStart?: WeekStart }) {
         const api = selectedApi(state); const user = state.user; const date = browserDay()
         if (!api.pinNote) throw new Error('Pinning is unavailable.')
