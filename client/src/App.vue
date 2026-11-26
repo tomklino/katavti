@@ -14,7 +14,7 @@
       <router-link class="brand" to="/" aria-label="Katavti home"><span class="brand-mark" aria-hidden="true">k<span>·</span></span><span>katavti</span></router-link>
       <nav class="primary-nav" aria-label="Main navigation">
         <router-link to="/daily">Daily</router-link>
-        <router-link to="/" exact-active-class="router-link-exact-active">All notes</router-link>
+        <router-link to="/browse" exact-active-class="router-link-exact-active">All notes</router-link>
       </nav>
       <div v-if="$route.name === 'home'" class="filters">
         <LookbackMenu :model-value="days" :active="!labelActive" @update:model-value="searchDays" />

@@ -13,8 +13,9 @@ const api = {
 }
 
 describe('Vue 3 bootstrap dependencies', () => {
-  it('installs the router and Vuex store on a Vue 3 application', () => {
+  it('installs the router and Vuex store on a Vue 3 application', async () => {
     const app = createApp(App).use(createStore(api)).use(router)
+    await router.isReady()
     expect(app.config.globalProperties.$store).toBeDefined()
     expect(app.config.globalProperties.$router).toBeDefined()
   })
