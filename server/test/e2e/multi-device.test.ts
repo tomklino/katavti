@@ -77,7 +77,7 @@ async function fakeLogin(page: Page, email: string) {
   const completed = page.waitForResponse(response => response.url().endsWith('/auth/fake-login') && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Fake log in (dev only)', exact: true }).click()
   expect((await completed).status()).toBe(200)
-  await page.getByRole('button', { name: 'Log out', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Profile', exact: true }).waitFor()
 }
 
 const editor = (page: Page) => page.locator('.note.active .cm-content')

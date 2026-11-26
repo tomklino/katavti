@@ -47,3 +47,52 @@ describe('fake login panel', () => {
     wrapper.unmount()
   })
 })
+
+function signedInPanel() {
+  const dispatch = vi.fn().mockResolvedValue('monday')
+  const wrapper = mount(LoginPanel, {
+    attachTo: document.body,
+    global: { mocks: { $store: { state: { user: { name: 'Writer' } }, dispatch } } },
+  })
+  return { wrapper, dispatch, profile: wrapper.get('button[aria-label="Profile"]') }
+}
+
+describe('profile settings', () => {
+  it('dismisses with Escape and restores focus without saving', async () => {
+    const { wrapper, dispatch, profile } = signedInPanel()
+    await profile.trigger('click')
+    expect(document.activeElement?.textContent).toBe('Settings')
+    await wrapper.get('.profile-actions button').trigger('click')
+    await flushPromises()
+    const settings = wrapper.get('[role="dialog"]')
+    expect(settings.attributes('aria-modal')).toBeUndefined()
+    expect(document.activeElement).toBe(settings.get('h2').element)
+    await settings.get('input[value="sunday"]').setValue(true)
+    await settings.get('input[value="sunday"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(profile.attributes('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(profile.element)
+    expect(dispatch).not.toHaveBeenCalledWith('setWeekStart', expect.anything())
+    wrapper.unmount()
+  })
+
+  it('keeps the pending selection after a failed save and closes on retry', async () => {
+    const { wrapper, dispatch, profile } = signedInPanel()
+    await profile.trigger('click')
+    await wrapper.get('.profile-actions button').trigger('click')
+    await flushPromises()
+    const settings = wrapper.get('[role="dialog"]')
+    const sunday = settings.get<HTMLInputElement>('input[value="sunday"]')
+    await sunday.setValue(true)
+    dispatch.mockRejectedValueOnce(new Error('Offline'))
+    await settings.get('form').trigger('submit')
+    await flushPromises()
+    expect(settings.get('[role="alert"]').text()).toContain('Unable to save settings')
+    expect(sunday.element.checked).toBe(true)
+    await settings.get('form').trigger('submit')
+    await flushPromises()
+    expect(dispatch).toHaveBeenLastCalledWith('setWeekStart', 'sunday')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
