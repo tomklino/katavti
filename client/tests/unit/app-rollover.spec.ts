@@ -21,7 +21,8 @@ async function setup() {
   }
   const store = createStore(api, api)
   const router = createRouter({ history: createMemoryHistory(), routes: [
-    { path: '/', name: 'home', component: { template: '<main />' } },
+    { path: '/', redirect: '/daily' },
+    { path: '/browse', name: 'home', component: { template: '<main />' } },
     { path: '/daily', name: 'daily', component: DailyView },
   ] })
   await router.push('/daily')

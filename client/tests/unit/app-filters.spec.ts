@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import App from '@/App.vue'
@@ -12,12 +12,13 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-async function mountApp(path = '/') {
+async function mountApp(path = '/browse') {
   const api = { list: vi.fn().mockResolvedValue([]), read: vi.fn(), update: vi.fn(), createDaily: vi.fn() }
   const store = createStore(api as any, api as any)
   const router = createRouter({ history: createMemoryHistory(), routes: [
-    { path: '/', name: 'home', component: { template: '<main />' } },
+    { path: '/', redirect: '/daily' },
     { path: '/daily', name: 'daily', component: { template: '<main />' } },
+    { path: '/browse', name: 'home', component: { template: '<main />' } },
   ] })
   await router.push(path)
   await router.isReady()
@@ -37,7 +38,10 @@ describe('top bar filters', () => {
     expect(wrapper.get('.brand').text()).toBe('k·katavti')
     expect(wrapper.get('.primary-nav').text()).toBe('DailyAll notes')
     expect(wrapper.find('[aria-label="Color theme"]').exists()).toBe(true)
-    await router.push('/')
+    expect(wrapper.get('.primary-nav a[href="/browse"]').text()).toBe('All notes')
+    await wrapper.get('.primary-nav a[href="/browse"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/browse')
     expect(wrapper.find('.filters').exists()).toBe(true)
     wrapper.unmount()
   })
@@ -86,7 +90,7 @@ describe('top bar filters', () => {
     await wrapper.vm.$nextTick()
     await router.push('/daily')
     expect(wrapper.find('.filters').exists()).toBe(false)
-    await router.push('/')
+    await router.push('/browse')
     expect(wrapper.get('.label-chip-text').text()).toBe('engineering')
     await wrapper.get('[aria-label="Clear label filter"]').trigger('click')
     expect(api.list).toHaveBeenLastCalledWith({ days: 90 })
