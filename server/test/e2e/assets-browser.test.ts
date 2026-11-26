@@ -94,7 +94,7 @@ async function login(page: Page, email: string) {
   await page.getByLabel('Email', { exact: true }).fill(email)
   const reloaded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1beta/notes/daily' && response.request().method() === 'PUT')
   await page.getByRole('button', { name: 'Fake log in (dev only)', exact: true }).click()
-  await page.getByRole('button', { name: 'Log out', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Profile', exact: true }).waitFor()
   expect((await reloaded).status()).toBe(201)
   await page.locator('.note.active .note-body').waitFor()
 }
@@ -257,6 +257,7 @@ describe('headless asset acceptance tests', () => {
     await download(page, 'recoverable.bin', bytes)
     await page.screenshot({ path: path.join(evidence, 'screenshots/06-server-backup-warning.png'), fullPage: true })
     await page.unroute('**/assets/*')
+    await page.getByRole('button', { name: 'Profile', exact: true }).click()
     await page.getByRole('button', { name: 'Log out', exact: true }).click()
     await login(page, 'assets-failure@example.com')
     expect((await storedAssets(page)).some(a => a.name === 'recoverable.bin' && a.synced)).toBe(true)
