@@ -5,7 +5,7 @@
       <div class="note-heading"><strong>{{ title }}</strong><time v-if="active">{{ formattedDate }}<span> / {{ pinLabel || (editable ? 'Daily note' : 'From your notebook') }}</span></time></div>
       <span v-if="label" class="note-label">{{ label }}</span>
       <span v-if="pinPeriod" class="note-label pin-label">{{ pinPeriod[0].toUpperCase() + pinPeriod.slice(1) }}</span>
-      <button ref="pinButton" type="button" class="pin-button" :class="{ pinned: pinPeriod }" :aria-label="`Pin ${title}`" :aria-pressed="Boolean(pinPeriod)" aria-haspopup="dialog" @click.stop="openPin">
+      <button ref="pinButton" type="button" class="pin-button" :class="{ pinned: pinPeriod }" :aria-label="`Pin ${title}`" :aria-pressed="Boolean(pinPeriod)" :aria-expanded="pinOpen" :aria-controls="pinId" :popovertarget="pinId" aria-haspopup="dialog" @click.stop>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h-5l-1 6-4 4v2h13v-2l-3-4V3ZM12.5 15v6" /></svg>
       </button>
       <div v-if="active" class="actions">
@@ -16,25 +16,32 @@
       </div>
       <span v-else class="note-chevron" aria-hidden="true">↗</span>
     </header>
-    <dialog ref="pinDialog" class="pin-dialog" aria-label="Pin note" @click.stop="onPinClick" @close="closePin">
-      <h2>{{ pinStep === 'weekStart' ? 'When does your week start?' : 'Pin note' }}</h2>
-      <p v-if="pinStep === 'weekStart'">We’ll remember this for future weekly pins.</p>
-      <p v-else>{{ title }} · Pinned through the end of the selected period.</p>
+    <section :id="pinId" ref="pinPanel" class="pin-panel" popover="auto" role="dialog" aria-label="Pin note" @click.stop @beforetoggle="beforePinToggle" @toggle="onPinToggle" @focusout="onPinFocusOut">
+      <div class="pin-heading">
+        <h2 ref="pinHeading" tabindex="-1" autofocus>{{ pinStep === 'weekStart' ? 'When does your week start?' : 'Pin note' }}</h2>
+        <button type="button" class="pin-close" aria-label="Close pin menu" @click="dismissPin()">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m5 5 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+        </button>
+      </div>
+      <p class="pin-hint">{{ pinStep === 'weekStart' ? 'Saved for future weekly pins.' : 'Keep pinned through the end of…' }}</p>
       <div class="pin-options">
         <template v-if="pinStep === 'weekStart'">
-          <button type="button" :disabled="pinning" @click="pin('week', 'sunday')">Sunday</button>
-          <button type="button" :disabled="pinning" @click="pin('week', 'monday')">Monday</button>
+          <button type="button" :aria-disabled="pinning || undefined" @click="pin('week', 'sunday')">Sunday</button>
+          <button type="button" :aria-disabled="pinning || undefined" @click="pin('week', 'monday')">Monday</button>
         </template>
         <template v-else>
-          <button type="button" :disabled="pinning" :aria-pressed="pinPeriod === 'week'" @click="pin('week')">This week</button>
-          <button type="button" :disabled="pinning" :aria-pressed="pinPeriod === 'month'" @click="pin('month')">This month</button>
-          <button type="button" :disabled="pinning" :aria-pressed="pinPeriod === 'year'" @click="pin('year')">This year</button>
+          <button v-for="option in pinPeriods" :key="option.period" type="button" :aria-disabled="pinning || undefined" :aria-pressed="pinPeriod === option.period" @click="pin(option.period)">
+            {{ option.label }}
+            <svg v-if="pinPeriod === option.period" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 8 3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          </button>
         </template>
-        <button v-if="pinPeriod" type="button" :disabled="pinning" @click="unpin">Unpin</button>
-        <button type="button" @click="dismissPin">Cancel</button>
       </div>
-      <p v-if="pinError" role="alert">{{ pinError }}</p>
-    </dialog>
+      <div v-if="pinStep === 'weekStart' || pinPeriod" class="pin-footer pin-options">
+        <button v-if="pinStep === 'weekStart'" type="button" @click="showPinStep('period')">Back</button>
+        <button v-else type="button" :aria-disabled="pinning || undefined" @click="unpin">Unpin</button>
+      </div>
+      <p v-if="pinError" class="pin-error" role="alert">{{ pinError }}</p>
+    </section>
     <p v-if="active && saveError" class="save-error" role="alert">{{ saveError }} Copy your draft before <button type="button" :disabled="reloading" @click.stop="reload">reloading the latest version</button>.</p>
     <div v-if="active && uploading" class="asset-progress" role="status">
       <span>{{ uploadStatus }} · {{ uploadIndex }} of {{ uploadTotal }} files</span>
@@ -57,7 +64,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, markRaw } from 'vue'
+import { defineComponent, markRaw, useId } from 'vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { markdown } from '@/markdown'
 import { downloadNoteAsset, noteAssetImageUrl, uploadNoteAsset, type AssetUploadProgress } from '@/api/assets'
@@ -73,6 +80,7 @@ export default defineComponent({
   components: { MarkdownEditor },
   props: { id: { type: String, required: true }, index: { type: Number, default: 0 }, editable: Boolean, active: { type: Boolean, default: true }, startRaw: Boolean, browsing: Boolean, pinLabel: String },
   emits: ['activate', 'pinned', 'unpinned'],
+  setup() { return { pinId: `pin-${useId()}` } },
   data() {
     const views = getViewState(this.$store)
     const positions = markRaw(this.pinLabel ? new Map() as typeof views.daily.notes : this.browsing ? views.home.notes : views.daily.notes)
@@ -83,8 +91,9 @@ export default defineComponent({
       uploadProgress: { stage: 'saving', percent: null } as AssetUploadProgress,
       pendingAttachments: [] as PendingAttachment[], contentVersion: 0, disposed: false,
       assetMessage: '', assetError: false, assetImageUrls: {} as Record<string, string>, imageGeneration: 0,
-      pinStep: 'period' as 'period' | 'weekStart', pinning: false, pinError: '',
-      pinDialogObserver: null as ResizeObserver | null,
+      pinStep: 'period' as 'period' | 'weekStart', pinOpen: false, pinning: false, pinError: '',
+      pinPeriods: [{ period: 'week', label: 'This week' }, { period: 'month', label: 'This month' }, { period: 'year', label: 'This year' }] as const,
+      pinPanelObserver: null as ResizeObserver | null,
     }
   },
   computed: {
@@ -190,25 +199,56 @@ export default defineComponent({
       this.pendingContent = null
       return this.$store.dispatch('saveNote', { id: this.id, content })
     },
-    openPin() {
-      this.pinStep = 'period'; this.pinError = ''
-      const dialog = this.$refs.pinDialog as HTMLDialogElement
-      dialog.showModal()
+    beforePinToggle(event: ToggleEvent) {
+      if (event.newState === 'closed') {
+        this.pinOpen = false
+        this.stopPositioningPin()
+        return
+      }
+      if (this.pinning) { event.preventDefault(); return }
+      this.pinStep = 'period'
+      this.pinError = ''
+      this.pinOpen = true
+    },
+    onPinToggle(event: ToggleEvent) {
+      if (event.newState !== 'open' || !this.pinOpen) return
+      const panel = this.$refs.pinPanel as HTMLElement
+      panel.scrollTop = 0
       this.positionPin()
+      if (!this.pinOpen) return
       window.addEventListener('resize', this.positionPin)
       window.addEventListener('scroll', this.positionPin, true)
       if (typeof ResizeObserver !== 'undefined') {
-        this.pinDialogObserver = new ResizeObserver(this.positionPin)
-        this.pinDialogObserver.observe(dialog)
+        this.pinPanelObserver = new ResizeObserver(() => this.positionPin())
+        this.pinPanelObserver.observe(panel)
       }
     },
-    positionPin() {
-      const dialog = this.$refs.pinDialog as HTMLDialogElement | undefined
+    onPinFocusOut(event: FocusEvent) {
+      const next = event.relatedTarget
+      const panel = this.$refs.pinPanel as HTMLElement
+      if (next instanceof Node && next !== this.$refs.pinButton && !panel.contains(next)) this.dismissPin(false)
+    },
+    async showPinStep(step: 'period' | 'weekStart') {
+      this.pinStep = step
+      this.pinError = ''
+      await this.$nextTick()
+      this.positionPin()
+      const heading = this.$refs.pinHeading as HTMLElement | undefined
+      if (this.pinOpen) heading?.focus({ preventScroll: true })
+    },
+    positionPin(event?: Event) {
+      const panel = this.$refs.pinPanel as HTMLElement | undefined
       const button = this.$refs.pinButton as HTMLButtonElement | undefined
-      if (!dialog?.open || !button) return
+      if (!this.pinOpen || !panel || !button) return
       const anchor = button.getBoundingClientRect()
-      const { width, height } = dialog.getBoundingClientRect()
+      const { width, height } = panel.getBoundingClientRect()
       const { clientWidth, clientHeight } = document.documentElement
+      const scrollTarget = event?.target
+      const scrollBounds = scrollTarget instanceof HTMLElement && scrollTarget.contains(button) ? scrollTarget.getBoundingClientRect() : null
+      if (anchor.bottom <= Math.max(0, scrollBounds?.top ?? 0) || anchor.top >= Math.min(clientHeight, scrollBounds?.bottom ?? clientHeight)) {
+        this.dismissPin(false)
+        return
+      }
       const edge = 8
       const gap = 6
       const below = anchor.bottom + gap
@@ -216,27 +256,21 @@ export default defineComponent({
       const fitsBelow = below + height <= clientHeight - edge
       const fitsAbove = above >= edge
       const top = fitsBelow || (!fitsAbove && clientHeight - anchor.bottom >= anchor.top) ? below : above
-      dialog.style.left = `${Math.max(edge, Math.min(anchor.right - width, clientWidth - width - edge))}px`
-      dialog.style.top = `${Math.max(edge, Math.min(top, clientHeight - height - edge))}px`
+      panel.style.left = `${Math.max(edge, Math.min(anchor.right - width, clientWidth - width - edge))}px`
+      panel.style.top = `${Math.max(edge, Math.min(top, clientHeight - height - edge))}px`
     },
     stopPositioningPin() {
       window.removeEventListener('resize', this.positionPin)
       window.removeEventListener('scroll', this.positionPin, true)
-      this.pinDialogObserver?.disconnect()
-      this.pinDialogObserver = null
+      this.pinPanelObserver?.disconnect()
+      this.pinPanelObserver = null
     },
-    onPinClick(event: MouseEvent) {
-      // Backdrop clicks target the dialog itself, as do clicks on its padding.
-      const dialog = this.$refs.pinDialog as HTMLDialogElement
-      if (event.target !== dialog) return
-      const { left, right, top, bottom } = dialog.getBoundingClientRect()
-      if (event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom) this.dismissPin()
-    },
-    dismissPin() { (this.$refs.pinDialog as HTMLDialogElement).close() },
-    closePin() {
-      this.stopPositioningPin()
-      const button = this.$refs.pinButton as HTMLButtonElement | undefined
-      button?.focus()
+    dismissPin(restoreFocus = true) {
+      if (!this.pinOpen) return
+      const panel = this.$refs.pinPanel as HTMLElement
+      const restore = restoreFocus && panel.contains(document.activeElement)
+      panel.hidePopover()
+      if (restore) (this.$refs.pinButton as HTMLButtonElement).focus({ preventScroll: true })
     },
     async unpin() {
       if (this.pinning) return
@@ -252,12 +286,9 @@ export default defineComponent({
       this.pinning = true; this.pinError = ''
       try {
         const weekStart = period === 'week' ? start ?? await this.$store.dispatch('getWeekStart') : undefined
-        if (!(this.$refs.pinDialog as HTMLDialogElement | undefined)?.open) return
+        if (this.disposed || !this.pinOpen) return
         if (period === 'week' && !weekStart) {
-          this.pinStep = 'weekStart'
-          await this.$nextTick()
-          const dialog = this.$refs.pinDialog as HTMLDialogElement | undefined
-          dialog?.querySelector('button')?.focus()
+          await this.showPinStep('weekStart')
           return
         }
         // Start any debounced edit now. A pin references the saved note, not a copy.
@@ -381,15 +412,56 @@ time span { opacity: .8; }
 .note-label { background: var(--tag-bg); border-radius: 4px; color: var(--tag-text); font-size: 10px; padding: 3px 8px; }
 .note-chevron { color: var(--muted); font-size: 15px; margin-left: 8px; }
 .pin-button { align-items: center; background: transparent; border-color: transparent; color: var(--muted); display: flex; justify-content: center; min-height: 24px; min-width: 26px; padding: 3px; }
-.pin-button:hover { border-color: var(--line); color: var(--accent); }
+.pin-button:hover, .pin-button[aria-expanded='true'] { border-color: var(--active-line); color: var(--accent); }
+.pin-button[aria-expanded='true'] { background: var(--tag-bg); }
 .pin-button.pinned { color: var(--accent); }
-.pin-dialog { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--note-shadow); box-sizing: border-box; color: var(--text); inset: auto; margin: 0; max-height: calc(100% - 16px); max-width: calc(100% - 16px); padding: 18px; position: fixed; width: 380px; }
-.pin-dialog::backdrop { background: rgb(15 23 42 / .45); }
-.pin-dialog h2 { font-size: 16px; margin: 0 0 8px; }
-.pin-dialog p { color: var(--muted); font-size: 13px; margin: 0 0 12px; overflow-wrap: anywhere; }
-.pin-options { display: flex; flex-wrap: wrap; gap: 6px; }
-.pin-options button { font-size: 12px; }
-.pin-dialog [role='alert'] { color: #b91c1c; margin: 8px 0 0; }
+.pin-panel {
+  position: fixed;
+  inset: auto;
+  width: 216px;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  margin: 0;
+  padding: 5px;
+  overflow: auto;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px #00000018;
+  font-size: 12px;
+  cursor: default;
+}
+.pin-heading { display: flex; align-items: center; justify-content: space-between; gap: 5px; padding: 0 2px 0 9px; }
+.pin-heading h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.pin-close {
+  display: grid;
+  flex: 0 0 28px;
+  place-items: center;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.pin-close:hover { background: var(--collapsed); }
+.pin-hint { color: var(--text); margin: 2px 9px 6px; font-size: 11px; }
+.pin-options button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+}
+.pin-options button[aria-pressed='true'] { background: var(--tag-bg); color: var(--accent); font-weight: 600; }
+.pin-options button:not([aria-disabled]):hover { background: var(--collapsed); color: var(--accent); }
+.pin-options button[aria-disabled='true'] { opacity: .6; cursor: wait; }
+.pin-footer { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+.pin-error { margin: 5px 9px 7px; overflow-wrap: anywhere; }
 .actions { align-items: center; display: flex; gap: 12px; white-space: nowrap; }
 .asset-input { display: none; }
 .asset-message { color: var(--muted); flex-shrink: 0; font-size: 11px; margin: 0; padding: 6px 14px; }

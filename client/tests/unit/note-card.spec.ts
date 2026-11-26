@@ -58,22 +58,30 @@ describe('NoteCard focus states', () => {
     expect((wrapper.findAll('.rendered input[type="checkbox"]')[0].element as HTMLInputElement).checked).toBe(true)
   })
 
-  it('only dismisses the pin dialog for clicks outside its bounds', async () => {
+  it('links the pin button to a nonmodal popover without activating the note', async () => {
     const wrapper = mountCard(false)
-    const dialog = wrapper.get('dialog').element as HTMLDialogElement
-    dialog.showModal = () => { dialog.setAttribute('open', '') }
-    dialog.close = vi.fn(() => { dialog.removeAttribute('open'); dialog.dispatchEvent(new Event('close')) })
-    vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 100, 200, 150))
+    const trigger = wrapper.get('.pin-button')
+    const panel = wrapper.get<HTMLElement>('.pin-panel')
+    const toggle = (newState: string) => {
+      const event = Object.assign(new Event('beforetoggle'), { newState })
+      panel.element.dispatchEvent(event)
+    }
+    panel.element.hidePopover = vi.fn(() => toggle('closed'))
+    vi.spyOn(trigger.element, 'getBoundingClientRect').mockReturnValue(new DOMRect(120, 100, 26, 24))
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(600)
     try {
-      await wrapper.get('.pin-button').trigger('click')
-      await wrapper.get('dialog').trigger('click', { clientX: 101, clientY: 101 })
-      await wrapper.get('dialog h2').trigger('click', { clientX: 150, clientY: 120 })
-      expect(dialog.close).not.toHaveBeenCalled()
-      expect(wrapper.emitted('activate')).toBeUndefined()
-
-      await wrapper.get('dialog').trigger('click', { clientX: 99, clientY: 101 })
-      expect(dialog.close).toHaveBeenCalledOnce()
-      expect(dialog.open).toBe(false)
+      expect(panel.attributes('popover')).toBe('auto')
+      expect(panel.attributes('aria-modal')).toBeUndefined()
+      expect(trigger.attributes('popovertarget')).toBe(panel.attributes('id'))
+      await trigger.trigger('click')
+      toggle('open')
+      await flushPromises()
+      expect(trigger.attributes('aria-expanded')).toBe('true')
+      await panel.get('h2').trigger('click')
+      expect(panel.element.hidePopover).not.toHaveBeenCalled()
+      await panel.get('[aria-label="Close pin menu"]').trigger('click')
+      expect(panel.element.hidePopover).toHaveBeenCalledOnce()
+      expect(trigger.attributes('aria-expanded')).toBe('false')
       expect(wrapper.emitted('activate')).toBeUndefined()
     } finally { wrapper.unmount() }
   })
