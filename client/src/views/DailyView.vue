@@ -1,5 +1,5 @@
 <template>
-  <main>
+  <main :class="{ 'pinned-active': Boolean(activePin) }">
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <section ref="notes" class="notes" aria-label="Daily notes">
       <NoteCard
@@ -26,14 +26,14 @@
         editable
         start-raw
         :active="activePin === id"
-        @activate="activePin = id"
+        @activate="activatePin(id)"
         @pinned="announcePin"
         @unpinned="pinMessage = 'Note unpinned.'"
       />
     </section>
     <div class="daily-controls">
       <span v-if="pinMessage" class="pin-message" role="status">{{ pinMessage }}</span>
-      <nav v-if="dailyIds.length > maxVisible" class="note-pages" aria-label="Daily note pages">
+      <nav v-if="!activePin && dailyIds.length > maxVisible" class="note-pages" aria-label="Daily note pages">
         <button :disabled="pageStart === 0" aria-label="Previous daily notes" @click="activate(pageStart - 1)">←</button>
         <span>{{ pageStart + 1 }}–{{ pageStart + visibleDailyIds.length }} / {{ dailyIds.length }}</span>
         <button :disabled="pageStart + maxVisible >= dailyIds.length" aria-label="Next daily notes" @click="activate(pageStart + maxVisible)">→</button>
@@ -62,8 +62,8 @@ export default defineComponent({
       const pinnedIds = new Set(this.$store.state.pins.map((pin: NotePin) => pin.id))
       return this.$store.state.dailyIds.filter((id: string) => !pinnedIds.has(id))
     },
-    pageStart(): number { return Math.floor(this.active / this.maxVisible) * this.maxVisible },
-    visibleDailyIds(): string[] { return this.dailyIds.slice(this.pageStart, this.pageStart + this.maxVisible) },
+    pageStart(): number { return this.active < 0 ? 0 : Math.floor(this.active / this.maxVisible) * this.maxVisible },
+    visibleDailyIds(): string[] { return this.activePin ? this.dailyIds : this.dailyIds.slice(this.pageStart, this.pageStart + this.maxVisible) },
     pinnedNotes(): { id: string; label: string }[] {
       return this.$store.state.pins.map(({ id, period }: NotePin) => ({ id, label: period[0].toUpperCase() + period.slice(1) }))
     },
@@ -84,7 +84,10 @@ export default defineComponent({
       } else {
         const index = ids.indexOf(activeId)
         this.active = index < 0 ? Math.min(this.active, Math.max(0, ids.length - 1)) : index
-        if (activeId && !ids.includes(activeId) && this.$store.state.pins.some((pin: NotePin) => pin.id === activeId)) this.activePin = activeId
+        if (activeId && !ids.includes(activeId) && this.$store.state.pins.some((pin: NotePin) => pin.id === activeId)) {
+          this.active = -1
+          this.activePin = activeId
+        }
       }
     },
   },
@@ -117,7 +120,8 @@ export default defineComponent({
         this.active = Math.min(this.active, Math.max(0, this.dailyIds.length - 1))
       } catch { this.error = 'Unable to open your daily notes. Please try again.' }
     },
-    activate(index: number) { this.active = index },
+    activate(index: number) { this.active = index; this.activePin = '' },
+    activatePin(id: string) { this.active = -1; this.activePin = id },
     async add() {
       if (this.adding) return
       this.adding = true
@@ -139,6 +143,9 @@ main { display: flex; flex-direction: column; }
 .pinned-notes { display: flex; flex: 0 0 auto; flex-direction: column; gap: 4px; max-height: 38%; overflow-y: auto; margin-top: 8px; }
 .pinned-notes h2 { color: var(--muted); font-size: 11px; font-weight: 600; margin: 0 0 2px; }
 .pinned-notes :deep(.note.active) { flex: 0 0 auto; min-height: 120px; max-height: 200px; }
+main.pinned-active .notes { flex: 0 0 auto; }
+main.pinned-active .pinned-notes { flex: 1 1 auto; max-height: none; min-height: 0; }
+main.pinned-active .pinned-notes :deep(.note.active) { flex: 1 1 0; max-height: none; min-height: 0; }
 .pin-message { color: var(--muted); font-size: 11px; }
 .daily-controls { align-items: center; display: flex; flex-shrink: 0; gap: 10px; min-height: 32px; padding-top: 6px; }
 .note-pages { align-items: center; color: var(--muted); display: flex; font-size: 10px; gap: 8px; }
