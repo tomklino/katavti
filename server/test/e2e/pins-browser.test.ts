@@ -134,7 +134,7 @@ async function visiblePins(page: Page, titles: string[]) {
   if (!titles.length) expect(await pinned(page).count()).toBe(0)
 }
 
-it('dismisses the pin dialog on outside clicks but not clicks inside it', async () => {
+it('dismisses the pin popover without blocking the editor', async () => {
   const page = await device()
   try {
     await openDay(page, '2026-07-18')
@@ -143,18 +143,20 @@ it('dismisses the pin dialog on outside clicks but not clicks inside it', async 
     const box = await dialog(page).boundingBox()
     if (!box) throw new Error('Missing pin dialog')
 
-    // The dialog's padding and contents are not the backdrop.
+    expect(await dialog(page).getAttribute('aria-modal')).toBeNull()
+    // The panel's padding and contents are inside the light-dismiss boundary.
     await page.mouse.click(box.x + 3, box.y + 3)
     expect(await dialog(page).isVisible()).toBe(true)
     await dialog(page).getByRole('heading', { name: 'Pin note' }).click()
     expect(await dialog(page).isVisible()).toBe(true)
 
-    await page.mouse.click(1, 1)
+    const editor = daily(page).locator('.note.active .cm-content')
+    await editor.click({ position: { x: 10, y: 10 } })
     await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
-    expect(await trigger.evaluate(button => button === document.activeElement)).toBe(true)
+    expect(await editor.evaluate(element => element === document.activeElement)).toBe(true)
     expect(await pinned(page).count()).toBe(0)
 
-    // The pin button is also outside the modal; a click there closes it.
+    // Clicking the pin button again toggles the panel closed.
     await trigger.click()
     const triggerBox = await trigger.boundingBox()
     if (!triggerBox) throw new Error('Missing pin button')
@@ -168,10 +170,18 @@ it('dismisses the pin dialog on outside clicks but not clicks inside it', async 
     await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
     expect(await pinned(page).count()).toBe(0)
 
-    await trigger.click()
-    await page.getByRole('heading', { name: 'Pin note' }).waitFor()
-    await dialog(page).getByRole('button', { name: 'Cancel' }).click()
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+    const heading = dialog(page).getByRole('heading')
+    expect(await heading.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Tab') // Close
+    await page.keyboard.press('Tab') // This week
+    await page.keyboard.press('Enter')
+    await dialog(page).getByRole('button', { name: 'Back' }).click()
+    await dialog(page).getByRole('button', { name: 'This month' }).waitFor()
+    await dialog(page).getByRole('button', { name: 'Close pin menu' }).click()
     await dialog(page).waitFor({ state: 'hidden', timeout: 2000 })
+    expect(await trigger.evaluate(button => button === document.activeElement)).toBe(true)
   } finally {
     await page.context().close()
   }
@@ -258,6 +268,7 @@ it('switches and unpins an anonymous note across reloads', async () => {
     await page.reload()
     await visiblePins(page, ['Local switch'])
     await pinned(page).getByRole('button', { name: 'Pin Local switch', exact: true }).click()
+    expect(await dialog(page).getByRole('button', { name: 'This month' }).getAttribute('aria-pressed')).toBe('true')
     await pin(page, 'This year', 'year', false)
     expect(await pinned(page).locator('.pin-label').innerText()).toBe('Year')
     await page.reload()
