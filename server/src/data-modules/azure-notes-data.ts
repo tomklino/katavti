@@ -4,6 +4,7 @@ import { NotesError, type Note, type NotesData, type PinRequest } from './notes-
 import { calendarDate, dailyNotePath, findPins, pinStatePath, pinStateRecord, pinRequest } from './note-pins.js'
 import { checkRevision, staleNoteError } from './note-conflicts.js'
 import { validateAssetFilename, type AssetsData } from './assets-data.js'
+import { matchesLabel, parseLabels } from './labels.js'
 
 type AzureContainer = Pick<ContainerClient, 'createIfNotExists' | 'getBlockBlobClient' | 'listBlobsFlat'>
 
@@ -103,7 +104,8 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
     const decoded = decodeNoteId(id)
     try {
       await initialize()
-      return { ...await downloadVersion(blobName(userId, id)), ISODateString: dateFromId(decoded).toISOString(), tags: [] }
+      const version = await downloadVersion(blobName(userId, id))
+      return { ...version, ISODateString: dateFromId(decoded).toISOString(), tags: parseLabels(version.content) }
     } catch (error) {
       if (isNotFound(error)) throw new NotesError('Note not found', 404)
       throw error
@@ -148,14 +150,14 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
       try {
         const result = await container.getBlockBlobClient(`${userId}/${imported}`).upload(content, Buffer.byteLength(content), { conditions: { ifNoneMatch: '*' } })
         if (!result.etag) throw new Error('Blob upload is missing its ETag')
-        return { id: encodeURIComponent(imported), note: { content, revision: result.etag, ISODateString: dateFromId(imported).toISOString(), tags: [] } }
+        return { id: encodeURIComponent(imported), note: { content, revision: result.etag, ISODateString: dateFromId(imported).toISOString(), tags: parseLabels(content) } }
       } catch (error: any) {
         if (error?.statusCode !== 409 && error?.statusCode !== 412 && error?.code !== 'BlobAlreadyExists') throw error
       }
     }
   }
 
-  async function list(userId: string, query: { days?: number; bug?: string }) {
+  async function list(userId: string, query: { days?: number; bug?: string; label?: string }) {
     validateUserId(userId)
     await initialize()
     const prefix = `${userId}/`
@@ -166,7 +168,9 @@ export function createAzureNotesData(options: AzureNotesOptions): NotesData & As
       if (!dailyNotePath.test(id)) continue
       let content: string
       try { content = (await container.getBlockBlobClient(blob.name).downloadToBuffer()).toString('utf8') } catch { continue }
-      if (query.bug) {
+      if (query.label) {
+        if (!matchesLabel(content, query.label)) continue
+      } else if (query.bug) {
         if (!content.split('\n').some(line => ['Bug', 'Label'].some(label => line.trim() === `${label}: ${query.bug}`))) continue
       } else if (!content.length || dateFromId(id) < cutoff) continue
       matched.push(id)

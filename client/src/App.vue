@@ -19,14 +19,15 @@
       <div v-if="$route.name === 'home'" class="filters">
         <LookbackMenu :model-value="days" :active="!labelActive" @update:model-value="searchDays" />
         <form class="label-search" role="search" @submit.prevent="searchLabel">
-          <span v-if="labelActive" class="label-chip" :title="`Active label: ${$store.state.bug}`">
-            <span class="label-chip-text">{{ $store.state.bug }}</span>
+          <span v-if="labelActive" class="label-chip" :title="`Active label: ${activeLabel}`">
+            <span class="label-chip-text">{{ activeLabel }}</span>
             <button type="button" class="clear-label" aria-label="Clear label filter" title="Clear label filter" @click="clearLabel"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m5 5 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg></button>
           </span>
-          <input v-model="bug" aria-label="Search label" aria-describedby="filter-status" :placeholder="labelActive ? 'Label…' : 'Find a label…'">
+          <input v-model="bug" aria-label="Search label" aria-describedby="filter-status" :placeholder="labelActive ? 'key: value…' : 'Find key: value…'">
           <button type="submit" class="search-submit" :disabled="!bug.trim()">Search</button>
         </form>
-        <span id="filter-status" class="filter-status" role="status">{{ labelActive ? `Filtering by label: ${$store.state.bug}` : `Filtering by the last ${days} days` }}</span>
+        <span v-if="labelError" role="alert">{{ labelError }}</span>
+        <span id="filter-status" class="filter-status" role="status">{{ labelActive ? `Filtering by label: ${activeLabel}` : `Filtering by the last ${days} days` }}</span>
       </div>
       <div class="header-account">
         <ThemeToggle v-model="theme" />
@@ -43,13 +44,15 @@ import MessageBar from '@/components/MessageBar.vue'
 import LookbackMenu from '@/components/LookbackMenu.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { initialTheme, rememberTheme, resolveTheme, type Theme } from '@/theme'
+import { parseLabels } from '@/labels'
 export default defineComponent({
   components: { LoginPanel, MessageBar, LookbackMenu, ThemeToggle },
   created() { this.$store.dispatch('initializeAuth').catch(() => undefined) },
-  data() { return { startingDay: false, dayError: '', days: this.$store.state.days, bug: '', theme: initialTheme(), systemDark: false, colorQuery: null as MediaQueryList | null } },
+  data() { return { startingDay: false, dayError: '', labelError: '', days: this.$store.state.days, bug: '', theme: initialTheme(), systemDark: false, colorQuery: null as MediaQueryList | null } },
   computed: {
     resolvedTheme(): 'light' | 'dark' { return resolveTheme(this.theme, this.systemDark) },
-    labelActive(): boolean { return Boolean(this.$store.state.bug) },
+    activeLabel(): string { return this.$store.state.label || this.$store.state.bug },
+    labelActive(): boolean { return Boolean(this.activeLabel) },
   },
   mounted() {
     this.colorQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -71,16 +74,20 @@ export default defineComponent({
     },
     systemThemeChanged(event: MediaQueryListEvent) { this.systemDark = event.matches },
     searchDays(days: number) {
+      this.labelError = ''
       this.days = days
       this.$store.dispatch('loadNotes', { days: this.days }).catch(() => undefined)
     },
     searchLabel() {
       const label = this.bug.trim()
       if (!label) return
+      const isPair = !label.includes('\n') && parseLabels(label).length === 1
+      if (!isPair && /[:\s]/.test(label)) { this.labelError = 'Use key: value (one word each).'; return }
+      this.labelError = ''
       this.bug = ''
-      this.$store.dispatch('loadNotes', { bug: label }).catch(() => undefined)
+      this.$store.dispatch('loadNotes', isPair ? { label } : { bug: label }).catch(() => undefined)
     },
-    clearLabel() { this.$store.dispatch('loadNotes', { days: this.days }).catch(() => undefined) },
+    clearLabel() { this.labelError = ''; this.$store.dispatch('loadNotes', { days: this.days }).catch(() => undefined) },
   },
 })
 </script>

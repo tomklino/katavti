@@ -1,7 +1,7 @@
 export type Note = { content: string; ISODateString: string; tags: Array<[string, string]>; revision?: string; backedUpContent?: string; backedUpId?: string }
 export type SaveResult = string | { id: string; revision?: string }
 export type ImportResult = { id: string; note: Note }
-export type ListQuery = { days?: number; bug?: string }
+export type ListQuery = { days?: number; bug?: string; label?: string }
 export type WeekStart = 'sunday' | 'monday'
 export type NotePin = { id: string; period: 'week' | 'month' | 'year' }
 export type PinRequest = { period: NotePin['period']; date: string; weekStart?: WeekStart }
@@ -20,7 +20,8 @@ export function createNotesApi(baseUrl = import.meta.env.VITE_API_URL || '') {
   return {
     list(query: ListQuery) {
       const params = new URLSearchParams()
-      if (query.bug) params.set('bug', query.bug)
+      if (query.label) params.set('label', query.label)
+      else if (query.bug) params.set('bug', query.bug)
       else if (query.days !== undefined) params.set('days', String(query.days))
       return request<string[]>(`/notes?${params}`)
     },

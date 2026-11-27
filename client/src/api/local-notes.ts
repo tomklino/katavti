@@ -1,4 +1,5 @@
 import type { ListQuery, Note, NotesApi } from './notes'
+import { matchesLabel, parseLabels } from '../labels'
 import { backUpNoteAssets } from './assets'
 import { localWeekStart, pinLocally, readLocalPins, writeLocalPins } from './local-pins'
 
@@ -26,6 +27,7 @@ export function createLocalNotesApi(storage: Storage = localStorage): NotesApi {
       const cutoff = new Date(); cutoff.setUTCDate(cutoff.getUTCDate() - (query.days ?? 5))
       return Object.keys(notes).filter(id => {
         const note = notes[id]
+        if (query.label) return matchesLabel(note.content, query.label)
         if (query.bug) return note.content.split('\n').some(line => ['Bug', 'Label'].some(prefix => line.trim() === `${prefix}: ${query.bug}`))
         return note.content.length > 0 && dateFromId(id) >= cutoff
       }).sort((a, b) => dateFromId(b).getTime() - dateFromId(a).getTime())
@@ -33,12 +35,12 @@ export function createLocalNotesApi(storage: Storage = localStorage): NotesApi {
     async read(id: string) {
       const note = readStorage(storage)[id]
       if (!note) throw new Error('Note not found')
-      return note
+      return { ...note, tags: parseLabels(note.content) }
     },
     async update(id: string, content: string, revision?: string) {
       const notes = readStorage(storage)
       const previous = notes[id]
-      notes[id] = { ...previous, content, revision, ISODateString: previous?.ISODateString || dateFromId(id).toISOString(), tags: previous?.tags || [] }
+      notes[id] = { ...previous, content, revision, ISODateString: previous?.ISODateString || dateFromId(id).toISOString(), tags: parseLabels(content) }
       writeStorage(storage, notes)
       return decodeURIComponent(id)
     },

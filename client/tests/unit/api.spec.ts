@@ -16,6 +16,13 @@ describe('notes API same-origin requests', () => {
     )
   })
 
+  it('encodes key/value label queries', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] })
+    vi.stubGlobal('fetch', fetchMock)
+    await createNotesApi().list({ label: '2p: Tom' })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1beta/notes?label=2p%3A+Tom')
+  })
+
   it('sends the read revision as a save precondition and retains HTTP conflict status', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: 'Stale note conflict' }) })
     vi.stubGlobal('fetch', fetchMock)

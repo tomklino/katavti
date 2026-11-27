@@ -70,6 +70,8 @@ The final interface combines Ink’s compact top navigation with Studio’s ligh
 
 **Daily** fills the remaining viewport height, with one expanded writing area and compact note headers. The notes collection never scrolls; long text scrolls inside the active editor or preview. When there are too many notes to keep a usable editor, previous/next controls page the headers. **All Notes** expands every note to its natural height in a single scrolling reading feed. Exact-label search and lookback appear only in **All Notes**: the themed lookback menu highlights the selected range, while a label search highlights a removable chip instead. Short labels stay fully visible; long labels truncate without crowding the search or removal controls. The menu supports arrow keys, Home/End, and Escape. Markdown/raw mode, copy, and autosave remain available.
 
+A label is a complete line such as `tag: issue` or `2p: Tom`: the key starts with an ASCII letter or digit and continues with letters, digits, or underscores, followed by a colon, exactly one space, and a single non-whitespace value. Multiple labels per note are shown. Search for `key: value` in All Notes to match both parts exactly, ignoring case, across all dates. A single-word search retains the legacy `Bug`/`Label` value filter. The notes API also accepts `?label=key%3A%20value`; malformed label queries return HTTP 400.
+
 To reproduce the headless visual review against a running dev server (Chrome must be installed):
 
 ```sh

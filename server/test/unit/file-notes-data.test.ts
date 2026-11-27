@@ -108,6 +108,16 @@ describe('filesystem notes data', () => {
     expect(await data.list('alice@example.com', { bug: 'KAT-7' })).toEqual([recent])
   })
 
+  it('extracts and searches exact label pairs across old notes', async () => {
+    const data = createData()
+    const [id] = await data.createDaily('alice', 1, '2026-09-01')
+    await data.update('alice', id, 'tag: issue\nNumber: 123\n2p: Tom\nsomething else: base\n#Title: something')
+    expect((await data.read('alice', id)).tags).toEqual([['tag', 'issue'], ['Number', '123'], ['2p', 'Tom']])
+    expect(await data.list('alice', { label: 'TAG: ISSUE' })).toEqual([id])
+    expect(await data.list('alice', { label: '2P: tom' })).toEqual([id])
+    expect(await data.list('alice', { label: 'other: issue' })).toEqual([])
+  })
+
   it('does not truncate existing daily notes', async () => {
     const data = createData()
     const ids = await data.createDaily('alice@example.com', 2, '2026-09-25')

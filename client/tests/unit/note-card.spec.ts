@@ -31,6 +31,12 @@ describe('NoteCard focus states', () => {
     wrapper.unmount()
   })
 
+  it('displays all valid key/value labels and excludes invalid lines', () => {
+    const wrapper = mountCard(false, 'tag: issue\nsomething else: base\n#Title: something\nNumber: 123\n2p: Tom')
+    expect(wrapper.findAll('.note-label').map(label => label.text())).toEqual(['tag: issue', 'Number: 123', '2p: Tom'])
+    wrapper.unmount()
+  })
+
   it('shows only the title while compacted', () => {
     const wrapper = mountCard(false)
     expect(wrapper.classes()).not.toContain('active')
@@ -104,7 +110,7 @@ describe('NoteCard focus states', () => {
 
   it('shows label and accurate word count without modifying the Markdown', () => {
     const wrapper = mountCard(true, '# A thought\n\nLabel: design\n\nKeep it simple.')
-    expect(wrapper.get('.note-label').text()).toBe('design')
+    expect(wrapper.get('.note-label').text()).toBe('Label: design')
     expect(wrapper.get('.note-footer').text()).toContain('8 words')
     expect(wrapper.vm.$store.state.notes['note-1'].content).toContain('Label: design')
     wrapper.unmount()

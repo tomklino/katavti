@@ -68,6 +68,21 @@ describe('top bar filters', () => {
     wrapper.unmount()
   })
 
+  it('searches a key/value pair and rejects malformed pairs', async () => {
+    const { wrapper, store, api } = await mountApp()
+    const input = wrapper.get('[aria-label="Search label"]')
+    await input.setValue('  Tag: Issue  ')
+    await wrapper.get('form').trigger('submit')
+    expect(api.list).toHaveBeenLastCalledWith({ label: 'Tag: Issue' })
+    expect(store.state.label).toBe('Tag: Issue')
+    expect(wrapper.get('.label-chip-text').text()).toBe('Tag: Issue')
+    await input.setValue('something else: base')
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Use key: value')
+    expect(api.list).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('switches back to days even when reselecting the previous range', async () => {
     const { wrapper, store, api } = await mountApp()
     store.commit('setFilter', { bug: 'planning' })

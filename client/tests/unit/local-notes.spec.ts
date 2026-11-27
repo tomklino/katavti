@@ -23,6 +23,16 @@ describe('local notes', () => {
     expect(await api.list({ days: 5 })).toContain(id)
   })
 
+  it('parses and searches exact key/value labels locally', async () => {
+    const api = createLocalNotesApi(memoryStorage())
+    const [id] = await api.createDaily(1, '2026-09-01')
+    await api.update(id, 'tag: issue\nNumber: 123\n2p: Tom\nsomething else: base\n#Title: something')
+    expect((await api.read(id)).tags).toEqual([['tag', 'issue'], ['Number', '123'], ['2p', 'Tom']])
+    expect(await api.list({ label: 'TAG: ISSUE' })).toEqual([id])
+    expect(await api.list({ label: '2P: tom' })).toEqual([id])
+    expect(await api.list({ label: 'other: issue' })).toEqual([])
+  })
+
   it('switches one local pin between periods and removes it on unpin', async () => {
     const storage = memoryStorage()
     const api = createLocalNotesApi(storage)

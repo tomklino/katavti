@@ -14,7 +14,7 @@ export type NotesData = {
   read(userId: string, id: string): Promise<Note>
   update(userId: string, id: string, content: string, revision?: string): Promise<SaveResult>
   importNote(userId: string, id: string, content: string): Promise<ImportResult>
-  list(userId: string, query: { days?: number; bug?: string }): Promise<string[]>
+  list(userId: string, query: { days?: number; bug?: string; label?: string }): Promise<string[]>
   pinNote(userId: string, id: string, request: PinRequest): Promise<NotePin>
   unpinNote(userId: string, id: string, date: string): Promise<void>
   listPins(userId: string, date?: string): Promise<NotePin[]>

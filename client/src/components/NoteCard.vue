@@ -3,7 +3,7 @@
     <header :tabindex="active ? -1 : 0" :role="active ? undefined : 'button'" :aria-expanded="active" @keydown.enter.self.prevent="$emit('activate')" @keydown.space.self.prevent="$emit('activate')">
       <span class="note-number" aria-hidden="true">{{ (index + 1).toString().padStart(2, '0') }}</span>
       <div class="note-heading"><strong>{{ title }}</strong><time v-if="active">{{ formattedDate }}<span> / {{ pinLabel || (editable ? 'Daily note' : 'From your notebook') }}</span></time></div>
-      <span v-if="label" class="note-label">{{ label }}</span>
+      <div v-if="labels.length" class="note-labels"><span v-for="([key, value], labelIndex) in labels" :key="labelIndex" class="note-label">{{ key }}: {{ value }}</span></div>
       <span v-if="pinPeriod" class="note-label pin-label">{{ pinPeriod[0].toUpperCase() + pinPeriod.slice(1) }}</span>
       <button ref="pinButton" type="button" class="pin-button" :class="{ pinned: pinPeriod }" :aria-label="`Pin ${title}`" :aria-pressed="Boolean(pinPeriod)" :aria-expanded="pinOpen" :aria-controls="pinId" :popovertarget="pinId" aria-haspopup="dialog" @click.stop>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h-5l-1 6-4 4v2h13v-2l-3-4V3ZM12.5 15v6" /></svg>
@@ -64,6 +64,7 @@
 </template>
 
 <script lang="ts">
+import { parseLabels } from '@/labels'
 import { defineComponent, markRaw, useId } from 'vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { markdown } from '@/markdown'
@@ -102,7 +103,7 @@ export default defineComponent({
     note(): any { return this.$store.state.notes[this.id] || { content: '', ISODateString: new Date().toISOString() } },
     title(): string { return this.note.content.split('\n').find((line: string) => line.trim())?.replace(/^#+\s*/, '') || 'Untitled note' },
     formattedDate(): string { return new Date(this.note.ISODateString).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) },
-    label(): string { return this.note.content.match(/^Label:\s*(.+)$/m)?.[1] || this.note.content.match(/^Bug:\s*(.+)$/m)?.[1] || '' },
+    labels(): Array<[string, string]> { return parseLabels(this.note.content) },
     wordCount(): number { return this.note.content.trim() ? this.note.content.trim().split(/\s+/).length : 0 },
     imageFilenames(): string[] {
       return [...new Set(markdown.parse(this.note.content, {}).flatMap(token => token.children || [])
@@ -409,7 +410,8 @@ strong { display: block; font-size: 13px; font-weight: 550; overflow: hidden; te
 .note.active .note-number { color: var(--accent); }
 time { color: var(--muted); display: block; font-size: 10px; margin-top: 5px; }
 time span { opacity: .8; }
-.note-label { background: var(--tag-bg); border-radius: 4px; color: var(--tag-text); font-size: 10px; padding: 3px 8px; }
+.note-labels { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.note-label { background: var(--tag-bg); border-radius: 4px; color: var(--tag-text); font-size: 10px; overflow-wrap: anywhere; padding: 3px 8px; }
 .note-chevron { color: var(--muted); font-size: 15px; margin-left: 8px; }
 .pin-button { align-items: center; background: transparent; border-color: transparent; color: var(--muted); display: flex; justify-content: center; min-height: 24px; min-width: 26px; padding: 3px; }
 .pin-button:hover, .pin-button[aria-expanded='true'] { border-color: var(--active-line); color: var(--accent); }
@@ -493,7 +495,9 @@ time span { opacity: .8; }
 @media (max-width: 600px) {
   header { gap: 8px; padding: 0 10px; }
   .note.active header { min-height: 48px; }
-  .note.active .note-label:not(.pin-label), time span { display: none; }
+  header { flex-wrap: wrap; }
+  .note-labels { flex-basis: 100%; order: 2; padding-bottom: 6px; }
+  time span { display: none; }
   .actions { gap: 6px; }.actions button { font-size: 10px; padding: 5px 7px; }
   .raw-toggle { font-size: 10px; }.rendered { padding: 0 12px 12px; }
   .note-footer { font-size: 8px; padding: 6px 10px; }

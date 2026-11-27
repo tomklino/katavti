@@ -8,7 +8,7 @@ function browserDay(now = new Date()): string {
 }
 
 export type State = {
-  days: number; bug: string; noteIds: string[]; dailyIds: string[]; notes: Record<string, Note>
+  days: number; bug: string; label: string; noteIds: string[]; dailyIds: string[]; notes: Record<string, Note>
   unsavedNotes: Record<string, boolean>; saveErrors: Record<string, string | null>
   dailyDate: string; previousDayWarning: boolean; pins: NotePin[]
   loading: boolean; error: string | null; user: User | null; storageWarning: boolean; backupStatus: string
@@ -29,9 +29,9 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
   let dailyLoad = 0
   let pinGeneration = 0
   return createVuexStore<State>({
-    state: { pins: [], dailyDate: '', previousDayWarning: false, days: 5, bug: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, saveErrors: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
+    state: { pins: [], dailyDate: '', previousDayWarning: false, days: 5, bug: '', label: '', noteIds: [], dailyIds: [], notes: {}, unsavedNotes: {}, saveErrors: {}, loading: false, error: null, user: null, storageWarning: false, backupStatus: '' },
     mutations: {
-      setFilter(state, query: ListQuery) { if (query.days !== undefined) state.days = query.days; state.bug = query.bug || '' },
+      setFilter(state, query: ListQuery) { if (query.days !== undefined) state.days = query.days; state.bug = query.bug || ''; state.label = query.label || '' },
       setIds(state, ids: string[]) { state.noteIds = ids }, setDailyIds(state, ids: string[]) { state.dailyIds = ids },
       setNote(state, { id, note }: { id: string; note: Note }) { state.notes[id] = note },
       setPins(state, pins: NotePin[]) { state.pins = pins },
@@ -85,7 +85,7 @@ export function createStore(remoteApi: NotesApi = notesApi, localApi: NotesApi =
       async logout({ commit }) { await authApi.logout(); commit('setUser', null) },
       dismissStorageWarning({ commit }) { sessionStorage.setItem('katavti.storage-warning-dismissed', '1'); commit('setStorageWarning', false) },
       async loadNotes({ state, commit, dispatch }, query?: ListQuery) {
-        const effective = query || (state.bug ? { bug: state.bug } : { days: state.days })
+        const effective = query || (state.label ? { label: state.label } : state.bug ? { bug: state.bug } : { days: state.days })
         commit('setLoading', true); commit('setError', null)
         try {
           commit('setFilter', effective)

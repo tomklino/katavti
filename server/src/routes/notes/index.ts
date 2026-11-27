@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { NotesData } from '../../data-modules/notes-data.js'
 import { calendarDate, pinRequest } from '../../data-modules/note-pins.js'
+import { parseLabels } from '../../data-modules/labels.js'
 
 type Variables = { userId: string }
 
@@ -10,7 +11,9 @@ export function noteRoutes(service: NotesData) {
     const rawDays = c.req.query('days')
     const days = rawDays === undefined ? undefined : Number(rawDays)
     if (days !== undefined && (!Number.isInteger(days) || days < 0)) return c.json({ error: 'days must be a non-negative integer' }, 400)
-    return c.json(await service.list(c.get('userId'), { days, bug: c.req.query('bug') }))
+    const label = c.req.query('label')
+    if (label !== undefined && (label.includes('\n') || parseLabels(label).length !== 1)) return c.json({ error: 'label must be key: value' }, 400)
+    return c.json(await service.list(c.get('userId'), { days, bug: c.req.query('bug'), label }))
   })
   routes.post('/import', async c => {
     let body: any

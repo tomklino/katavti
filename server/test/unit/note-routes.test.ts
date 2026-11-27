@@ -15,6 +15,17 @@ function setup() {
 }
 
 describe('note save and import HTTP contracts', () => {
+  it('validates and forwards label pair queries', async () => {
+    const { app, service } = setup()
+    vi.mocked(service.list).mockResolvedValue([])
+    expect((await app.request('/notes?label=2p%3A%20Tom')).status).toBe(200)
+    expect(service.list).toHaveBeenCalledWith('alice', { days: undefined, bug: undefined, label: '2p: Tom' })
+    for (const label of ['something else: base', '#Title: something', 'tag:  issue', 'tag: issue\n', '']) {
+      expect((await app.request(`/notes?label=${encodeURIComponent(label)}`)).status).toBe(400)
+    }
+    expect(service.list).toHaveBeenCalledTimes(1)
+  })
+
   it('passes the base revision to storage and returns a meaningful conflict', async () => {
     const { service, post } = setup()
     vi.mocked(service.update).mockRejectedValue(new NotesError('Stale note conflict', 409))

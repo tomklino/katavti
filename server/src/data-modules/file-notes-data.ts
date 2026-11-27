@@ -5,6 +5,7 @@ import { NotesError, type Note, type NotesData, type PinRequest } from './notes-
 import { calendarDate, dailyNotePath, findPins, pinStatePath, pinStateRecord, pinRequest } from './note-pins.js'
 import { checkRevision } from './note-conflicts.js'
 import { validateAssetFilename, type AssetsData } from './assets-data.js'
+import { matchesLabel, parseLabels } from './labels.js'
 
 type FileSystem = {
   mkdir(path: string, options: { recursive: true }): Promise<unknown>
@@ -135,7 +136,8 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     const { decoded, resolved } = notePath(userId, id)
     await rejectSymlinkPath(userDirectory(userId), resolved)
     try {
-      return { ...await readVersion(resolved), ISODateString: dateFromId(decoded).toISOString(), tags: [] }
+      const version = await readVersion(resolved)
+      return { ...version, ISODateString: dateFromId(decoded).toISOString(), tags: parseLabels(version.content) }
     } catch (error: any) {
       if (error?.code === 'ENOENT') throw new NotesError('Note not found', 404)
       throw error
@@ -190,7 +192,7 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
     } finally { await rm(temporary, { force: true }) }
   }
 
-  async function list(userId: string, query: { days?: number; bug?: string }) {
+  async function list(userId: string, query: { days?: number; bug?: string; label?: string }) {
     const root = userDirectory(userId)
     let names: string[]
     try { names = await fs.readdir(root, { recursive: true }) }
@@ -206,7 +208,9 @@ export function createFileNotesData(options: { dataDir: string; now?: () => Date
         await rejectSymlinkPath(root, resolved)
         content = await fs.readFile(resolved, 'utf8')
       } catch { return }
-      if (query.bug) {
+      if (query.label) {
+        if (!matchesLabel(content, query.label)) return
+      } else if (query.bug) {
         if (!content.split('\n').some(line => ['Bug', 'Label'].some(prefix => line.trim() === `${prefix}: ${query.bug}`))) return
       } else if (!content.length || dateFromId(id) < cutoff) return
       matched.push(id)
